@@ -4,7 +4,7 @@
 
 Custom integration for **Home Assistant Core (2026.11+)** that estimates tomorrow's daytime photovoltaic surplus and calculates the **minimum target SOC at the end of the off-peak grid window** (default `08:00`) so daytime solar generation can charge the battery to 100%.
 
-> **Safe by default (`v0.2.5`)**: the integration runs in **simulation mode** while **`Real inverter control`** is turned off (`OFF` by default). When explicitly enabled, it only updates the overnight Program SOC target (`number.inversordeye_program_1_soc`) and never modifies voltages, max currents, or BMS protections.
+> **Safe by default (`v0.2.6`)**: the integration runs in **simulation mode** while **`Real inverter control`** is turned off (`OFF` by default). When explicitly enabled, it only updates the overnight Program SOC target (`number.inversordeye_program_1_soc`) and never modifies voltages, max currents, or BMS protections.
 
 ---
 
@@ -98,21 +98,21 @@ With `11.91 kWh` PV forecast, `5.10 kWh` daytime load, `12.0 kWh` usable capacit
 ## Safety & Fail-Safe Design
 
 - **Freshness checks (`last_reported`)**: if PV forecast is older than `36h` or SOC older than `60m`, calculation turns invalid and **refuses to order charge** (`fail_safe_hold`). Static settings like max charge current do not expire.
-- **Explicit units**: both config flow and coordinator validate `kWh`/`Wh` for energy, `%` for SOC, and `A` for current; missing units fail safely.
+- **Explicit units**: the config flow requires `kWh`/`Wh` for energy, `%` for the SOC sensor, and—when present—`%` for Program SOC and `A` for max current; the coordinator enforces `kWh`/`Wh` on energy sensors and fails safely if missing.
 - **Fault isolation**: a temporary `recorder` or service-call error does not crash the coordinator or block turning off `Real inverter control`.
-- **Write verification & audit**: in real control mode, polls up to `5s × 2 attempts` to verify the HA entity state and logs actions to Home Assistant **Logbook** and diagnostics (`action_history`).
+- **Write verification & audit**: in real control mode, polls up to `5s × 2 attempts` to verify the HA entity state; persists the last 20 real state changes/errors in `Store` and emits **Logbook** entries only when an actual change or failure occurs.
 - **Switch-off behavior**: disables real control immediately and restores night idle SOC (`20%`) on a best-effort basis before returning to simulation.
 
 ---
 
 ## Inverter Prerequisites (Deye / Solarman)
 
-For real control on `number.inversordeye_program_1_soc` to work as expected:
+Verify in your Deye/Solarman setup that these conditions hold so real control on `number.inversordeye_program_1_soc` behaves as expected:
 
-1. **Time of Use enabled**: `select.inversordeye_time_of_use` must be `Week` or `Enabled` (not `Disabled`).
-2. **Matching window**: `Program 1` must cover the off-peak window (`00:00` → `Program 2 = 08:00`) with `Program 1 Charging = Grid`.
-3. **Capacity mode**: `select.inversordeye_battery_operation_mode` set to `Capacity` (SOC %).
-4. **Current & voltage**: `number.inversordeye_battery_grid_charging_current` is DC battery current in Amps; for 16S LiFePO4 ("48 V") packs, typical nominal voltage is `51.2 V`.
+1. **Time of Use enabled**: your inverter's *Time of Use* selector must be enabled (e.g. `Week` or `Enabled`, not `Disabled`).
+2. **Matching window**: `Program 1` must cover the off-peak window (`00:00` → `Program 2 = 08:00`) with grid charging (`Grid`) enabled for that slot.
+3. **Capacity mode**: battery operation mode configured by capacity/SOC (`Capacity`), not voltage-only.
+4. **Current & voltage**: the max grid charging current entity must express DC battery current in Amps; for 16S LiFePO4 ("48 V") packs, typical nominal voltage is `51.2 V`.
 
 ---
 

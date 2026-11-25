@@ -161,20 +161,21 @@ class TestCalculator(unittest.TestCase):
             usable_battery_kwh=12.0,
             charge_efficiency=1.0,
             safety_margin_soc=0.0,
-            min_operational_soc=19.6,
+            min_operational_soc=19.4,
             max_operational_soc=100.0,
         )
-        # surplus=9.64 kWh -> gain=80.333% -> raw=19.667% (>= 19.6), rounds to 20 -> >= ceil(19.6)=20
-        # Now test max bound: max=89.4, raw=89.3 -> floor(89.4)=89 -> rounds to 89.
-        # Test raw=89.4 -> rounds to 89 <= 89; raw=19.6 -> ceil(19.6)=20 -> clamped up from 19.6!
+        # surplus=9.672 -> gain=80.6 -> raw=19.4 (>= 19.4, not clamped yet),
+        # round(19.4)=19 < ceil(19.4)=20 -> integer clamp bumps to 20 and marks was_clamped=True.
         result = calculate_target_soc(
-            pv_forecast_kwh=13.648,
+            pv_forecast_kwh=13.672,
             load_samples=_valid_history(4.0),
             config=config,
         )
-        # surplus=9.648 -> gain=80.4 -> raw=19.6 (not < 19.6), round(19.6)=20 == ceil(19.6)
         self.assertTrue(result.is_valid)
+        self.assertAlmostEqual(result.target_soc_raw or 0.0, 19.4, places=3)
         self.assertEqual(result.target_soc_pct, 20)
+        self.assertTrue(result.was_clamped)
+        self.assertEqual(result.clamp_bound, "min")
 
 
 if __name__ == "__main__":

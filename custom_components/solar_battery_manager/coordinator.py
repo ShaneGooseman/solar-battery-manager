@@ -188,6 +188,7 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
         self._real_control_enabled = False
         self._latched_night_date: str | None = None
         self._action_history: list[dict[str, Any]] = []
+        self._last_audit_error_key: str | None = None
 
         # Daily Recorder cache to avoid querying SQL every 5 minutes
         self._history_cache_key: tuple[Any, ...] | None = None
@@ -246,6 +247,10 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 str(k): float(v) for k, v in actual_pv.items() if isinstance(v, (int, float))
             }
 
+        action_hist = stored.get("action_history")
+        if isinstance(action_hist, list):
+            self._action_history = [item for item in action_hist if isinstance(item, dict)][-20:]
+
     async def _async_save_storage(self) -> None:
         """Persist storage payload (keeping the last 7 days of snapshots)."""
         sorted_frozen = sorted(self._frozen_by_date.keys())[-7:]
@@ -254,12 +259,15 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
         sorted_pv = sorted(self._actual_pv_by_date.keys())[-7:]
         self._actual_pv_by_date = {k: self._actual_pv_by_date[k] for k in sorted_pv}
 
+        self._action_history = self._action_history[-20:]
+
         await self._store.async_save(
             {
                 "real_control_enabled": self._real_control_enabled,
                 "latched_night_date": self._latched_night_date,
                 "frozen_by_date": self._frozen_by_date,
                 "actual_pv_by_date": self._actual_pv_by_date,
+                "action_history": self._action_history,
             }
         )
 
@@ -292,7 +300,7 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
                     reason="Real inverter control disabled by user; restoring night idle SOC.",
                     now=local_now,
                 )
-                self._record_audit_action(record)
+                await self._async_record_audit_action(record)
             except Exception as err:  # noqa: BLE001
                 _LOGGER.exception(
                     "Failed to restore night idle SOC on disable for %s: %s",
@@ -404,32 +412,48 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 return self._get_deye_controller(str(deye_entity))
         return self._sim_controller
 
-    def _record_audit_action(self, record: ControlActionRecord) -> None:
-        """Keep bounded in-memory audit log and emit Home Assistant logbook entry for real writes."""
+    async def _async_record_audit_action(self, record: ControlActionRecord) -> None:
+        """Persist real control changes/errors and emit Logbook entries only on change."""
+        if record.simulated:
+            return
+
+        is_error = record.action in (
+            "write_verification_failed",
+            "write_failed",
+            "write_skipped_unavailable",
+        )
+        error_key = f"{record.action}:{record.reason}" if is_error else None
+        if is_error and error_key == self._last_audit_error_key:
+            return
+        if not record.state_changed and not is_error:
+            return
+
+        self._last_audit_error_key = error_key
         entry_dict = {
             "timestamp": record.timestamp.isoformat(),
             "action": record.action,
             "target_soc_pct": record.target_soc_pct,
             "simulated": record.simulated,
             "verified": record.verified,
+            "state_changed": record.state_changed,
             "reason": record.reason,
         }
         self._action_history.append(entry_dict)
         if len(self._action_history) > 20:
             self._action_history = self._action_history[-20:]
+        await self._async_save_storage()
 
-        if not record.simulated and record.action != "fail_safe_hold":
-            try:
-                from homeassistant.components.logbook import async_log_entry
+        try:
+            from homeassistant.components.logbook import async_log_entry
 
-                async_log_entry(
-                    self.hass,
-                    name="Solar Battery Manager",
-                    message=f"{record.action} (SOC={record.target_soc_pct}%, verified={record.verified}): {record.reason}",
-                    domain=DOMAIN,
-                )
-            except Exception:  # noqa: BLE001
-                pass
+            async_log_entry(
+                self.hass,
+                name="Solar Battery Manager",
+                message=f"{record.action} (SOC={record.target_soc_pct}%, verified={record.verified}): {record.reason}",
+                domain=DOMAIN,
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Logbook entry skipped: %s", err)
 
     def _capture_daily_pv_and_compare_yesterday(
         self,
@@ -585,7 +609,7 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
         if pv_err is None and pv_raw is not None and pv_scale is not None:
             pv_forecast_kwh = pv_raw * pv_scale
 
-        current_soc_pct, _, _ = _parse_float_state(
+        current_soc_pct, _, soc_err = _parse_float_state(
             self.hass,
             soc_entity,
             max_age=MAX_BATTERY_SOC_AGE,
@@ -740,6 +764,20 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
             nominal_voltage_v=nominal_voltage_v,
             buffer_minutes=buffer_minutes,
         )
+        if not charge_plan.is_valid and soc_err is not None and current_soc_pct is None:
+            charge_plan = ChargeSchedulePlan(
+                is_valid=False,
+                reason=f"Battery SOC unavailable or stale ({soc_err}).",
+                charging_current_a=charge_plan.charging_current_a,
+                nominal_voltage_v=charge_plan.nominal_voltage_v,
+                charging_power_kw=charge_plan.charging_power_kw,
+                estimated_duration_minutes=charge_plan.estimated_duration_minutes,
+                recommended_start_at=charge_plan.recommended_start_at,
+                window_start_at=charge_plan.window_start_at,
+                window_end_at=charge_plan.window_end_at,
+                can_reach_target_in_window=charge_plan.can_reach_target_in_window,
+                should_charge_now=False,
+            )
 
         # Anti-chattering latch: once charging starts in this tariff window, hold target SOC
         night_key = schedule_state.target_night_date.isoformat()
@@ -785,7 +823,7 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 reason=f"Inverter service call failed: {err}",
                 verified=False,
             )
-        self._record_audit_action(last_action)
+        await self._async_record_audit_action(last_action)
 
         return CoordinatorData(
             live_result=live_result,

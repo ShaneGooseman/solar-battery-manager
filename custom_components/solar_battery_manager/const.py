@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 DOMAIN = "solar_battery_manager"
-VERSION = "0.2.5"
+VERSION = "0.2.6"
 STORAGE_VERSION = 1
 STORAGE_KEY_PREFIX = f"{DOMAIN}_frozen_target"
 DEFAULT_SCAN_INTERVAL = timedelta(minutes=5)

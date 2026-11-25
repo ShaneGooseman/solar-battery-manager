@@ -24,6 +24,7 @@ class ControlActionRecord:
     simulated: bool
     reason: str
     verified: bool | None = None
+    state_changed: bool = False
 
 
 class InverterController(Protocol):
@@ -152,6 +153,7 @@ class DeyeProgramSocController:
                 simulated=False,
                 reason=f"{reason} (already at {target_soc_pct}%)",
                 verified=True,
+                state_changed=False,
             )
             self._last_action = record
             return record
@@ -197,6 +199,7 @@ class DeyeProgramSocController:
                 else f"Write to '{self._entity_id}' could not be verified after retry (observed={observed_state})."
             ),
             verified=verified,
+            state_changed=True,
         )
         self._last_action = record
         if not verified:

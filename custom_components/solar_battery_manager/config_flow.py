@@ -106,7 +106,9 @@ def _validate_selected_entities(
             if st is None:
                 return {"base": "invalid_entity"}
             unit = st.attributes.get("unit_of_measurement")
-            if unit != "%":
+            if soc_key == CONF_BATTERY_SOC_ENTITY and unit != "%":
+                return {"base": "invalid_entity_unit"}
+            if soc_key == CONF_DEYE_PROGRAM_SOC_ENTITY and unit is not None and unit != "%":
                 return {"base": "invalid_entity_unit"}
 
     current_entity = user_input.get(CONF_GRID_CHARGE_CURRENT_ENTITY)
@@ -114,7 +116,8 @@ def _validate_selected_entities(
         st = hass.states.get(current_entity)
         if st is None:
             return {"base": "invalid_entity"}
-        if st.attributes.get("unit_of_measurement") != "A":
+        unit = st.attributes.get("unit_of_measurement")
+        if unit is not None and unit != "A":
             return {"base": "invalid_entity_unit"}
 
     sun_entity = user_input.get(CONF_SUN_ENTITY)

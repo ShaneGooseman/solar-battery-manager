@@ -1,4 +1,4 @@
-# Especificación técnica — Solar Battery Manager (v0.2.5)
+# Especificación técnica — Solar Battery Manager (v0.2.6)
 
 ## 1. Comportamiento funcional
 
@@ -51,8 +51,11 @@ La integración (compatible con **Home Assistant Core 2026.11+**) realiza el sig
 - Comportamiento seguro:
   - Mantiene `night_idle_soc` (`20 %`) fuera de `00:00–08:00` y dentro de la ventana antes de `recommended_start_at`.
   - Escribe `target_soc_pct` en `number.inversordeye_program_1_soc` cuando `should_charge_now = True`, queda enclavado (*latch*) hasta el fin de la ventana y verifica la lectura (polling hasta 5 s × 2 intentos).
-  - Al desactivar el switch manualmente, restaura `night_idle_soc` (`20 %`).
-  - Detección de obsolescencia vía `last_reported`: `24 h` (previsión FV y producción diaria), `30 min` (SOC batería); sin caducidad para ajustes estáticos como la corriente máxima de carga.
+  - Al desactivar el switch manualmente, desactiva y persiste `False` primero y restaura `night_idle_soc` (`20 %`) en `try/except`.
+  - Aislamiento de fallos: errores del `recorder` o del servicio de escritura se capturan sin tumbar el coordinador ni el switch.
+  - Auditoría: persiste en `Store` las últimas 20 acciones reales (`action_history`) y emite entrada en `Logbook` (`after_dependencies: ["logbook"]`) solo cuando cambia el estado aplicado o ocurre un error.
+  - Detección de obsolescencia vía `last_reported`: `36 h` (previsión FV), `24 h` (producción diaria capturada tras el atardecer), `60 min` (SOC batería); sin caducidad para ajustes estáticos como la corriente máxima de carga.
+  - Requisitos del inversor: *Time of Use* activo, `Program 1` cubriendo la ventana económica con carga `Grid`, modo por capacidad (`Capacity`) y corriente DC de batería en Amperios.
   - Si `Cálculo listo` es `False` o la entidad destino no está disponible, no ordena carga (`fail_safe_hold`).
   - Nunca modifica tensiones, corrientes máximas, límites BMS ni protecciones de red.
 

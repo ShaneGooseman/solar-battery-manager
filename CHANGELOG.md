@@ -2,6 +2,12 @@
 
 Todos los cambios relevantes de **Solar Battery Manager** se documentan en este archivo.
 
+## [0.2.6] — 2026-11-26
+- **Auditoría limpia (Logbook + Store)**: persiste en `Store` las últimas 20 acciones reales (`action_history`) y emite eventos en el **Logbook** únicamente cuando cambia el valor escrito o se produce un error deduplicado (evitando 288 entradas/día). Añade `after_dependencies: ["logbook"]` en `manifest.json`.
+- **Validación de unidades flexible**: `ConfigFlow` y `OptionsFlow` permiten `unit_of_measurement` ausente en entidades `number` opcionales de Deye/corriente, rechazando únicamente unidades incompatibles.
+- **Motivos de frescura**: propaga `stale_state` del SOC de batería al motivo de `ChargeSchedulePlan`.
+- **Tests y documentación**: test real del clamp tras redondeo entero (`was_clamped=True`) y sincronización de `TECHNICAL_SPEC.md`, `README.md` y `README.en.md`.
+
 ## [0.2.5] — 2026-11-26
 - **Seguridad al desactivar el switch**: desactiva y persiste `real_control_enabled = False` antes de restaurar `night_idle_soc` en `try/except`, evitando que un fallo del inversor bloquee el apagado del control real.
 - **Aislamiento de fallos**: encapsula consultas al `recorder` y llamadas de escritura al inversor en `try/except` para no tumbar el coordinador ni el switch.

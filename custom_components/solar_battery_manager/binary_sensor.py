@@ -34,7 +34,7 @@ class SolarBatteryReadyBinarySensor(
     """Indicates whether the target SOC calculation is valid and ready."""
 
     _attr_has_entity_name = True
-    _attr_name = "Calculation ready"
+    _attr_translation_key = "calculation_ready"
     _attr_device_class = BinarySensorDeviceClass.RUNNING
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -50,7 +50,7 @@ class SolarBatteryReadyBinarySensor(
             name="Solar Battery Manager",
             manufacturer="Solar Battery Manager",
             model="Simulation Mode (Read-Only)",
-            sw_version="0.1.1",
+            sw_version="0.1.2",
             entry_type=DeviceEntryType.SERVICE,
         )
 

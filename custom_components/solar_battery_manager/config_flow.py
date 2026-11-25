@@ -176,6 +176,7 @@ def _parameters_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 SelectSelectorConfig(
                     options=[EstimationMethod.MEDIAN.value, EstimationMethod.MEAN.value],
                     mode=SelectSelectorMode.DROPDOWN,
+                    translation_key="estimation_method",
                 )
             ),
             vol.Required(

@@ -21,6 +21,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import CoordinatorData, SolarBatteryCoordinator
+from .engine.models import CalculationStatus
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -77,7 +78,7 @@ def _load_forecast_attrs(data: CoordinatorData) -> dict[str, Any]:
 SENSOR_DESCRIPTIONS: tuple[SolarBatterySensorDescription, ...] = (
     SolarBatterySensorDescription(
         key="pv_forecast_tomorrow",
-        name="PV forecast tomorrow",
+        translation_key="pv_forecast_tomorrow",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.MEASUREMENT,
@@ -90,7 +91,7 @@ SENSOR_DESCRIPTIONS: tuple[SolarBatterySensorDescription, ...] = (
     ),
     SolarBatterySensorDescription(
         key="load_forecast_tomorrow",
-        name="Daytime load forecast tomorrow",
+        translation_key="load_forecast_tomorrow",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.MEASUREMENT,
@@ -105,7 +106,7 @@ SENSOR_DESCRIPTIONS: tuple[SolarBatterySensorDescription, ...] = (
     ),
     SolarBatterySensorDescription(
         key="surplus_tomorrow",
-        name="Estimated solar surplus tomorrow",
+        translation_key="surplus_tomorrow",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.MEASUREMENT,
@@ -118,7 +119,7 @@ SENSOR_DESCRIPTIONS: tuple[SolarBatterySensorDescription, ...] = (
     ),
     SolarBatterySensorDescription(
         key="target_soc",
-        name="Target SOC at 08:00",
+        translation_key="target_soc",
         device_class=SensorDeviceClass.BATTERY,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -128,7 +129,7 @@ SENSOR_DESCRIPTIONS: tuple[SolarBatterySensorDescription, ...] = (
     ),
     SolarBatterySensorDescription(
         key="grid_energy_required",
-        name="Simulated grid energy required",
+        translation_key="grid_energy_required",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.MEASUREMENT,
@@ -141,7 +142,9 @@ SENSOR_DESCRIPTIONS: tuple[SolarBatterySensorDescription, ...] = (
     ),
     SolarBatterySensorDescription(
         key="model_status",
-        name="Model status",
+        translation_key="model_status",
+        device_class=SensorDeviceClass.ENUM,
+        options=[status.value for status in CalculationStatus],
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda d: d.effective_result.status_code.value,
         attrs_fn=lambda d: {
@@ -186,7 +189,7 @@ class SolarBatterySensor(CoordinatorEntity[SolarBatteryCoordinator], SensorEntit
             name="Solar Battery Manager",
             manufacturer="Solar Battery Manager",
             model="Simulation Mode (Read-Only)",
-            sw_version="0.1.1",
+            sw_version="0.1.2",
             entry_type=DeviceEntryType.SERVICE,
         )
 

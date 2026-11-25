@@ -68,5 +68,47 @@
       "invalid_parameters": "Uno o más parámetros de batería están fuera de rango.",
       "invalid_schedule": "Los horarios de ventana solar o tarifa no son válidos."
     }
+  },
+  "selector": {
+    "estimation_method": {
+      "options": {
+        "median": "Mediana",
+        "mean": "Media"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "pv_forecast_tomorrow": {
+        "name": "Previsión FV mañana"
+      },
+      "load_forecast_tomorrow": {
+        "name": "Consumo diurno previsto mañana"
+      },
+      "surplus_tomorrow": {
+        "name": "Excedente solar previsto mañana"
+      },
+      "target_soc": {
+        "name": "SOC objetivo a las 08:00"
+      },
+      "grid_energy_required": {
+        "name": "Energía de red simulada necesaria"
+      },
+      "model_status": {
+        "name": "Estado del modelo",
+        "state": {
+          "ok": "Correcto",
+          "invalid_config": "Configuración no válida",
+          "invalid_pv_forecast": "Previsión FV no válida",
+          "invalid_current_soc": "SOC actual no válido",
+          "insufficient_history": "Histórico insuficiente"
+        }
+      }
+    },
+    "binary_sensor": {
+      "calculation_ready": {
+        "name": "Cálculo listo"
+      }
+    }
   }
 }

@@ -68,5 +68,47 @@
       "invalid_parameters": "One or more battery or schedule parameters are out of range.",
       "invalid_schedule": "Tariff or solar window times are invalid."
     }
+  },
+  "selector": {
+    "estimation_method": {
+      "options": {
+        "median": "Median",
+        "mean": "Mean"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "pv_forecast_tomorrow": {
+        "name": "PV forecast tomorrow"
+      },
+      "load_forecast_tomorrow": {
+        "name": "Daytime load forecast tomorrow"
+      },
+      "surplus_tomorrow": {
+        "name": "Estimated solar surplus tomorrow"
+      },
+      "target_soc": {
+        "name": "Target SOC at 08:00"
+      },
+      "grid_energy_required": {
+        "name": "Simulated grid energy required"
+      },
+      "model_status": {
+        "name": "Model status",
+        "state": {
+          "ok": "OK",
+          "invalid_config": "Invalid configuration",
+          "invalid_pv_forecast": "Invalid PV forecast",
+          "invalid_current_soc": "Invalid current SOC",
+          "insufficient_history": "Insufficient history"
+        }
+      }
+    },
+    "binary_sensor": {
+      "calculation_ready": {
+        "name": "Calculation ready"
+      }
+    }
   }
 }

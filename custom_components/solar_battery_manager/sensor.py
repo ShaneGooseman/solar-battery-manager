@@ -108,6 +108,7 @@ def _model_status_attrs(data: CoordinatorData) -> dict[str, Any]:
         "reason": data.effective_result.reason,
         "simulation_mode": data.simulation_mode,
         "is_frozen": data.is_frozen,
+        "solar_window_paused": data.solar_window_paused,
         "last_control_action": action.action if action else None,
         "last_control_soc_pct": action.target_soc_pct if action else None,
         "last_control_verified": action.verified if action else None,
@@ -243,7 +244,7 @@ class SolarBatterySensor(CoordinatorEntity[SolarBatteryCoordinator], SensorEntit
             name="Solar Battery Manager",
             manufacturer="Solar Battery Manager",
             model="Simulation Mode (Read-Only)",
-            sw_version="0.2.0",
+            sw_version="0.2.1",
             entry_type=DeviceEntryType.SERVICE,
         )
 

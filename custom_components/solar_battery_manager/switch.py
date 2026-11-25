@@ -49,7 +49,7 @@ class SolarBatteryRealControlSwitch(
             name="Solar Battery Manager",
             manufacturer="Solar Battery Manager",
             model="Simulation Mode (Read-Only)",
-            sw_version="0.2.0",
+            sw_version="0.2.1",
             entry_type=DeviceEntryType.SERVICE,
         )
 

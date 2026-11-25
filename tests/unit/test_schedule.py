@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from custom_components.solar_battery_manager.engine import (
     TariffScheduleConfig,
     evaluate_schedule,
+    is_within_solar_window,
 )
 
 
@@ -82,6 +83,18 @@ class TestSchedule(unittest.TestCase):
         schedule = TariffScheduleConfig()
         with self.assertRaises(ValueError):
             evaluate_schedule(datetime(2026, 11, 25, 12, 0), schedule)
+
+    def test_solar_window_detection(self) -> None:
+        tz = ZoneInfo("Europe/Madrid")
+        self.assertFalse(
+            is_within_solar_window(datetime(2026, 11, 25, 7, 50, tzinfo=tz), time(8, 0), time(18, 0))
+        )
+        self.assertTrue(
+            is_within_solar_window(datetime(2026, 11, 25, 12, 0, tzinfo=tz), time(8, 0), time(18, 0))
+        )
+        self.assertFalse(
+            is_within_solar_window(datetime(2026, 11, 25, 18, 0, tzinfo=tz), time(8, 0), time(18, 0))
+        )
 
 
 if __name__ == "__main__":

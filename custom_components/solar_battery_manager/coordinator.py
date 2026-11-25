@@ -81,7 +81,7 @@ from .engine.models import (
     ScheduleState,
     TariffScheduleConfig,
 )
-from .engine.schedule import evaluate_schedule
+from .engine.schedule import evaluate_schedule, is_within_solar_window
 from .history import async_fetch_daytime_load_history, resolve_solar_window_from_sun
 
 _LOGGER = logging.getLogger(__name__)
@@ -134,6 +134,7 @@ class CoordinatorData:
     charge_plan: ChargeSchedulePlan
     forecast_comparison: ForecastComparison
     is_frozen: bool
+    solar_window_paused: bool
     simulation_mode: bool
     last_action: ControlActionRecord | None
 
@@ -299,6 +300,38 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 return DeyeProgramSocController(self.hass, str(deye_entity))
         return self._sim_controller
 
+    def _compute_forecast_comparison(self, local_date: date) -> ForecastComparison:
+        """Compare yesterday's frozen forecast for today against actual PV today."""
+        today_key = local_date.isoformat()
+        today_snapshot = self._frozen_by_date.get(today_key, {})
+        forecast_today_raw = today_snapshot.get("pv_forecast_kwh")
+        forecast_today_kwh = (
+            float(forecast_today_raw) if forecast_today_raw is not None else None
+        )
+        frozen_target_today = today_snapshot.get("target_soc_pct")
+
+        actual_today_kwh: float | None = None
+        prod_today_entity = self._cfg(CONF_PV_PRODUCTION_TODAY_ENTITY)
+        if prod_today_entity:
+            prod_raw, prod_unit, prod_err = _parse_float_state(self.hass, str(prod_today_entity))
+            prod_scale = _energy_unit_scale(prod_unit)
+            if prod_err is None and prod_raw is not None and prod_scale is not None:
+                actual_today_kwh = round(prod_raw * prod_scale, 2)
+
+        error_kwh, error_pct = calculate_forecast_error(
+            forecast_kwh=forecast_today_kwh,
+            actual_production_kwh=actual_today_kwh,
+        )
+        return ForecastComparison(
+            forecast_for_today_kwh=forecast_today_kwh,
+            actual_production_today_kwh=actual_today_kwh,
+            forecast_error_kwh=error_kwh,
+            forecast_error_pct=error_pct,
+            frozen_target_soc_for_today=(
+                int(frozen_target_today) if isinstance(frozen_target_today, int) else None
+            ),
+        )
+
     async def _async_update_data(self) -> CoordinatorData:
         """Fetch sensor states, recorder history, and compute target SOC."""
         if not self._storage_loaded:
@@ -364,6 +397,34 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
             )
             if sun_err_code is not None:
                 sun_err = f"Sun entity '{sun_entity}' error: {sun_err_code}."
+
+        # Pause heavy Recorder queries and SOC recalculation during daytime solar hours
+        # once initial data is available and night idle SOC has been restored.
+        if (
+            sun_err is None
+            and solar_start is not None
+            and solar_end is not None
+            and not schedule_state.in_tariff_window
+            and not schedule_state.is_freeze_active
+            and is_within_solar_window(schedule_state.now_local, solar_start, solar_end)
+            and self.data is not None
+            and self.data.last_action is not None
+            and self.data.last_action.action in ("restore_idle_soc", "simulate_idle_soc")
+            and self.data.simulation_mode == (not self._real_control_enabled)
+        ):
+            return CoordinatorData(
+                live_result=self.data.live_result,
+                effective_result=self.data.effective_result,
+                schedule_state=schedule_state,
+                charge_plan=self.data.charge_plan,
+                forecast_comparison=self._compute_forecast_comparison(
+                    schedule_state.now_local.date()
+                ),
+                is_frozen=self.data.is_frozen,
+                solar_window_paused=True,
+                simulation_mode=self.data.simulation_mode,
+                last_action=self.data.last_action,
+            )
 
         load_samples: list[DaytimeLoadSample] = []
         if sun_err is None and load_scale is not None and solar_start is not None and solar_end is not None:
@@ -461,35 +522,8 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
             now=schedule_state.now_local,
         )
 
-        # Forecast vs actual comparison for today (using yesterday's frozen snapshot)
-        today_key = schedule_state.now_local.date().isoformat()
-        today_snapshot = self._frozen_by_date.get(today_key, {})
-        forecast_today_raw = today_snapshot.get("pv_forecast_kwh")
-        forecast_today_kwh = (
-            float(forecast_today_raw) if forecast_today_raw is not None else None
-        )
-        frozen_target_today = today_snapshot.get("target_soc_pct")
-
-        actual_today_kwh: float | None = None
-        prod_today_entity = self._cfg(CONF_PV_PRODUCTION_TODAY_ENTITY)
-        if prod_today_entity:
-            prod_raw, prod_unit, prod_err = _parse_float_state(self.hass, str(prod_today_entity))
-            prod_scale = _energy_unit_scale(prod_unit)
-            if prod_err is None and prod_raw is not None and prod_scale is not None:
-                actual_today_kwh = round(prod_raw * prod_scale, 2)
-
-        error_kwh, error_pct = calculate_forecast_error(
-            forecast_kwh=forecast_today_kwh,
-            actual_production_kwh=actual_today_kwh,
-        )
-        forecast_comparison = ForecastComparison(
-            forecast_for_today_kwh=forecast_today_kwh,
-            actual_production_today_kwh=actual_today_kwh,
-            forecast_error_kwh=error_kwh,
-            forecast_error_pct=error_pct,
-            frozen_target_soc_for_today=(
-                int(frozen_target_today) if isinstance(frozen_target_today, int) else None
-            ),
+        forecast_comparison = self._compute_forecast_comparison(
+            schedule_state.now_local.date()
         )
 
         return CoordinatorData(
@@ -499,6 +533,7 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
             charge_plan=charge_plan,
             forecast_comparison=forecast_comparison,
             is_frozen=is_frozen,
+            solar_window_paused=False,
             simulation_mode=controller.is_simulation,
             last_action=last_action,
         )

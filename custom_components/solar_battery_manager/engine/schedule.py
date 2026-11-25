@@ -2,10 +2,20 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from .models import ScheduleState, TariffScheduleConfig
+
+
+def is_within_solar_window(
+    now_local: datetime,
+    solar_start: time,
+    solar_end: time,
+) -> bool:
+    """Return True when local time falls inside [solar_start, solar_end)."""
+    local_t = now_local.time().replace(tzinfo=None)
+    return solar_start <= local_t < solar_end
 
 
 def evaluate_schedule(

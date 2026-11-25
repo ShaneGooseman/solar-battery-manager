@@ -19,7 +19,7 @@ from .models import (
     ScheduleState,
     TariffScheduleConfig,
 )
-from .schedule import evaluate_schedule
+from .schedule import evaluate_schedule, is_within_solar_window
 
 __all__ = [
     "BatteryConfig",
@@ -37,5 +37,6 @@ __all__ = [
     "decide_program_soc_action",
     "estimate_daytime_load",
     "evaluate_schedule",
+    "is_within_solar_window",
     "plan_charge_window",
 ]

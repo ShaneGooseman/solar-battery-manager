@@ -14,6 +14,7 @@ CONF_PV_FORECAST_ENTITY = "pv_forecast_entity"
 CONF_LOAD_ENERGY_ENTITY = "load_energy_entity"
 CONF_BATTERY_SOC_ENTITY = "battery_soc_entity"
 CONF_GRID_CHARGE_CURRENT_ENTITY = "grid_charge_current_entity"
+CONF_SUN_ENTITY = "sun_entity"
 
 # Battery and calculation configuration keys
 CONF_USABLE_BATTERY_KWH = "usable_battery_kwh"
@@ -49,6 +50,7 @@ DEFAULT_LOOKBACK_DAYS = 14
 DEFAULT_MIN_HISTORY_DAYS = 3
 DEFAULT_SOLAR_WINDOW_START = "08:00:00"
 DEFAULT_SOLAR_WINDOW_END = "18:00:00"
+DEFAULT_SUN_ENTITY = "sun.sun"
 DEFAULT_TARIFF_START = "00:00:00"
 DEFAULT_TARIFF_END = "08:00:00"
 DEFAULT_FREEZE_TIME = "23:55:00"

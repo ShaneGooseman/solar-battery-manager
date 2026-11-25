@@ -38,6 +38,7 @@ from .const import (
     CONF_SAFETY_MARGIN_SOC,
     CONF_SOLAR_WINDOW_END,
     CONF_SOLAR_WINDOW_START,
+    CONF_SUN_ENTITY,
     CONF_TARIFF_END,
     CONF_TARIFF_START,
     CONF_USABLE_BATTERY_KWH,
@@ -53,6 +54,7 @@ from .const import (
     DEFAULT_SAFETY_MARGIN_SOC,
     DEFAULT_SOLAR_WINDOW_END,
     DEFAULT_SOLAR_WINDOW_START,
+    DEFAULT_SUN_ENTITY,
     DEFAULT_TARIFF_END,
     DEFAULT_TARIFF_START,
     DEFAULT_USABLE_BATTERY_KWH,
@@ -139,6 +141,10 @@ def _entities_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 CONF_GRID_CHARGE_CURRENT_ENTITY,
                 default=defaults.get(CONF_GRID_CHARGE_CURRENT_ENTITY),
             ): EntitySelector(EntitySelectorConfig(domain=["number", "sensor"])),
+            vol.Optional(
+                CONF_SUN_ENTITY,
+                default=defaults.get(CONF_SUN_ENTITY, DEFAULT_SUN_ENTITY),
+            ): EntitySelector(EntitySelectorConfig(domain="sun")),
         }
     )
 

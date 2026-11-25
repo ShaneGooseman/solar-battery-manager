@@ -8,6 +8,8 @@ import logging
 import math
 from typing import Any
 
+from zoneinfo import ZoneInfo
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, UnitOfEnergy
 from homeassistant.core import HomeAssistant
@@ -31,6 +33,7 @@ from .const import (
     CONF_SAFETY_MARGIN_SOC,
     CONF_SOLAR_WINDOW_END,
     CONF_SOLAR_WINDOW_START,
+    CONF_SUN_ENTITY,
     CONF_TARIFF_END,
     CONF_TARIFF_START,
     CONF_USABLE_BATTERY_KWH,
@@ -69,7 +72,7 @@ from .engine.models import (
     TariffScheduleConfig,
 )
 from .engine.schedule import evaluate_schedule
-from .history import async_fetch_daytime_load_history
+from .history import async_fetch_daytime_load_history, resolve_solar_window_from_sun
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -276,11 +279,20 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
         load_samples: list[DaytimeLoadSample] = []
         if load_scale is not None:
-            solar_start = time.fromisoformat(
+            fallback_start = time.fromisoformat(
                 str(self._cfg(CONF_SOLAR_WINDOW_START, DEFAULT_SOLAR_WINDOW_START))
             )
-            solar_end = time.fromisoformat(
+            fallback_end = time.fromisoformat(
                 str(self._cfg(CONF_SOLAR_WINDOW_END, DEFAULT_SOLAR_WINDOW_END))
+            )
+            sun_entity = self._cfg(CONF_SUN_ENTITY)
+            sun_state = self.hass.states.get(str(sun_entity)) if sun_entity else None
+            solar_start, solar_end, _ = resolve_solar_window_from_sun(
+                sun_state.attributes.get("next_rising") if sun_state else None,
+                sun_state.attributes.get("next_setting") if sun_state else None,
+                self.hass.config.time_zone,
+                fallback_start,
+                fallback_end,
             )
             load_samples = await async_fetch_daytime_load_history(
                 self.hass,

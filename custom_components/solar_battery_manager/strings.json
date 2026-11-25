@@ -8,7 +8,12 @@
           "pv_forecast_entity": "Tomorrow PV forecast sensor",
           "load_energy_entity": "House load energy sensor (for daytime history)",
           "battery_soc_entity": "Battery SOC sensor",
-          "grid_charge_current_entity": "Max grid charging current entity (optional)"
+          "grid_charge_current_entity": "Max grid charging current entity (optional)",
+          "sun_entity": "Sun entity (automatic sunrise/sunset window)"
+        },
+        "data_description": {
+          "grid_charge_current_entity": "Inverter entity with the max grid charging current in Amperes (e.g. number.inversordeye_battery_grid_charging_current).",
+          "sun_entity": "Optional Sun integration entity (sun.sun) to automatically derive sunrise and sunset hours."
         }
       },
       "parameters": {
@@ -30,6 +35,10 @@
           "tariff_start": "Economic tariff start",
           "tariff_end": "Economic tariff end",
           "freeze_time": "Pre-midnight target freeze time"
+        },
+        "data_description": {
+          "grid_charge_current_entity": "Inverter entity with the max grid charging current in Amperes (e.g. number.inversordeye_battery_grid_charging_current).",
+          "sun_entity": "Optional Sun integration entity (sun.sun) to automatically derive sunrise and sunset. Manual solar window hours are used as fallback."
         }
       }
     },
@@ -52,6 +61,7 @@
           "load_energy_entity": "House load energy sensor (for daytime history)",
           "battery_soc_entity": "Battery SOC sensor",
           "grid_charge_current_entity": "Max grid charging current entity (optional)",
+          "sun_entity": "Sun entity (automatic sunrise/sunset window)",
           "usable_battery_kwh": "Usable battery capacity (kWh)",
           "charge_efficiency": "Charge efficiency (%)",
           "safety_margin_soc": "Safety margin (% SOC)",
@@ -67,6 +77,10 @@
           "tariff_start": "Economic tariff start",
           "tariff_end": "Economic tariff end",
           "freeze_time": "Pre-midnight target freeze time"
+        },
+        "data_description": {
+          "grid_charge_current_entity": "Inverter entity with the max grid charging current in Amperes (e.g. number.inversordeye_battery_grid_charging_current).",
+          "sun_entity": "Optional Sun integration entity (sun.sun) to automatically derive sunrise and sunset. Manual solar window hours are used as fallback."
         }
       }
     },

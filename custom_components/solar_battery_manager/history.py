@@ -18,6 +18,39 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
+def resolve_solar_window_from_sun(
+    next_rising_raw: Any,
+    next_setting_raw: Any,
+    timezone_name: str,
+    fallback_start: time,
+    fallback_end: time,
+) -> tuple[time, time, bool]:
+    """Derive local solar window [sunrise, sunset) from Sun entity attributes."""
+    if not next_rising_raw or not next_setting_raw:
+        return fallback_start, fallback_end, False
+    try:
+        tz = ZoneInfo(timezone_name)
+        rising_dt = (
+            next_rising_raw
+            if isinstance(next_rising_raw, datetime)
+            else datetime.fromisoformat(str(next_rising_raw))
+        )
+        setting_dt = (
+            next_setting_raw
+            if isinstance(next_setting_raw, datetime)
+            else datetime.fromisoformat(str(next_setting_raw))
+        )
+        if rising_dt.tzinfo is None or setting_dt.tzinfo is None:
+            return fallback_start, fallback_end, False
+        start_t = rising_dt.astimezone(tz).time().replace(tzinfo=None, microsecond=0)
+        end_t = setting_dt.astimezone(tz).time().replace(tzinfo=None, microsecond=0)
+        if start_t >= end_t:
+            return fallback_start, fallback_end, False
+        return start_t, end_t, True
+    except (TypeError, ValueError):
+        return fallback_start, fallback_end, False
+
+
 def _parse_stat_start(raw_start: Any, tz: ZoneInfo) -> datetime | None:
     """Convert a Recorder statistics 'start' field to a local aware datetime."""
     if isinstance(raw_start, datetime):

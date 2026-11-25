@@ -8,7 +8,12 @@
           "pv_forecast_entity": "Sensor de previsión FV para mañana",
           "load_energy_entity": "Sensor de energía de consumo de la vivienda (histórico diurno)",
           "battery_soc_entity": "Sensor de SOC de batería",
-          "grid_charge_current_entity": "Entidad de corriente máxima de carga desde red (opcional)"
+          "grid_charge_current_entity": "Corriente máxima de carga desde red (opcional)",
+          "sun_entity": "Entidad Sun (amanecer y atardecer automáticos)"
+        },
+        "data_description": {
+          "grid_charge_current_entity": "Entidad del inversor con los amperios máximos de carga desde red (ej. number.inversordeye_battery_grid_charging_current).",
+          "sun_entity": "Entidad de la integración Sun (sun.sun) para obtener automáticamente la hora de amanecer y atardecer."
         }
       },
       "parameters": {
@@ -30,6 +35,10 @@
           "tariff_start": "Inicio de tarifa económica",
           "tariff_end": "Fin de tarifa económica",
           "freeze_time": "Hora de congelación pre-medianoche"
+        },
+        "data_description": {
+          "grid_charge_current_entity": "Entidad del inversor con los amperios máximos de carga desde red (ej. number.inversordeye_battery_grid_charging_current).",
+          "sun_entity": "Entidad de la integración Sun (sun.sun) para obtener automáticamente amanecer y atardecer. Si no se indica, se usan las horas manuales de respaldo."
         }
       }
     },
@@ -51,7 +60,8 @@
           "pv_forecast_entity": "Sensor de previsión FV para mañana",
           "load_energy_entity": "Sensor de energía de consumo de la vivienda (histórico diurno)",
           "battery_soc_entity": "Sensor de SOC de batería",
-          "grid_charge_current_entity": "Entidad de corriente máxima de carga desde red (opcional)",
+          "grid_charge_current_entity": "Corriente máxima de carga desde red (opcional)",
+          "sun_entity": "Entidad Sun (amanecer y atardecer automáticos)",
           "usable_battery_kwh": "Capacidad útil de batería (kWh)",
           "charge_efficiency": "Eficiencia de carga (%)",
           "safety_margin_soc": "Margen de seguridad (% SOC)",
@@ -67,6 +77,10 @@
           "tariff_start": "Inicio de tarifa económica",
           "tariff_end": "Fin de tarifa económica",
           "freeze_time": "Hora de congelación pre-medianoche"
+        },
+        "data_description": {
+          "grid_charge_current_entity": "Entidad del inversor con los amperios máximos de carga desde red (ej. number.inversordeye_battery_grid_charging_current).",
+          "sun_entity": "Entidad de la integración Sun (sun.sun) para obtener automáticamente amanecer y atardecer. Si no se indica, se usan las horas manuales de respaldo."
         }
       }
     },

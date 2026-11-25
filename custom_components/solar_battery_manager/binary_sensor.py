@@ -50,7 +50,7 @@ class SolarBatteryReadyBinarySensor(
             name="Solar Battery Manager",
             manufacturer="Solar Battery Manager",
             model="Simulation Mode (Read-Only)",
-            sw_version="0.1.3",
+            sw_version="0.1.4",
             entry_type=DeviceEntryType.SERVICE,
         )
 

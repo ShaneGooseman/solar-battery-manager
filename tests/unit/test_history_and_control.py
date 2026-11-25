@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 from custom_components.solar_battery_manager.control import ReadOnlySimulationController
 from custom_components.solar_battery_manager.history import (
     extract_daytime_samples_from_hourly_stats,
+    resolve_solar_window_from_sun,
 )
 
 _T = TypeVar("_T")
@@ -88,6 +89,35 @@ class TestReadOnlySimulationController(unittest.TestCase):
         self.assertTrue(record.simulated)
         self.assertEqual(record.target_soc_pct, 65)
         self.assertEqual(controller.last_action, record)
+
+
+class TestSunSolarWindow(unittest.TestCase):
+    """Test cases for deriving solar window from Sun entity attributes."""
+
+    def test_extracts_local_sunrise_and_sunset(self) -> None:
+        # 06:50 UTC = 07:50 CET; 16:45 UTC = 17:45 CET
+        start, end, used_sun = resolve_solar_window_from_sun(
+            "2026-11-26T06:50:00+00:00",
+            "2026-11-25T16:45:00+00:00",
+            "Europe/Madrid",
+            time(8, 0),
+            time(18, 0),
+        )
+        self.assertTrue(used_sun)
+        self.assertEqual(start, time(7, 50))
+        self.assertEqual(end, time(17, 45))
+
+    def test_falls_back_when_sun_attributes_missing_or_invalid(self) -> None:
+        start, end, used_sun = resolve_solar_window_from_sun(
+            None,
+            "invalid",
+            "Europe/Madrid",
+            time(8, 0),
+            time(18, 0),
+        )
+        self.assertFalse(used_sun)
+        self.assertEqual(start, time(8, 0))
+        self.assertEqual(end, time(18, 0))
 
 
 if __name__ == "__main__":

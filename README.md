@@ -4,7 +4,7 @@
 
 Integración personalizada para **Home Assistant Core (2026.11+)** que estima cuánta energía solar sobrará mañana y calcula el **SOC mínimo necesario al final de la tarifa económica nocturna** (por defecto `08:00`) para que la producción fotovoltaica del día lleve la batería al 100 %.
 
-> **Seguridad por defecto (`v0.2.6`)**: la integración funciona en **modo simulación** mientras el interruptor **`Control real del inversor`** esté apagado (`OFF` por defecto). Si decides activarlo, únicamente ajusta el SOC objetivo del tramo horario nocturno (`number.inversordeye_program_1_soc`) sin modificar nunca tensiones, corrientes máximas ni protecciones del BMS.
+> **Seguridad por defecto (`v0.2.7`)**: la integración funciona en **modo simulación** mientras el interruptor **`Control real del inversor`** esté apagado (`OFF` por defecto). Si decides activarlo, únicamente ajusta el SOC objetivo del tramo horario nocturno (`number.inversordeye_program_1_soc`) sin modificar nunca tensiones, corrientes máximas ni protecciones del BMS.
 
 ---
 

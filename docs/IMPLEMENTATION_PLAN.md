@@ -1,4 +1,4 @@
-# Plan de implementación — Estado actual (v0.2.6)
+# Plan de implementación — Estado actual (v0.2.7)
 
 ## Fase 0 — Inspección y decisiones (Completada)
 - Confirmada versión base **Home Assistant Core 2026.11**.

@@ -2,6 +2,12 @@
 
 Todos los cambios relevantes de **Solar Battery Manager** se documentan en este archivo.
 
+## [0.2.7] — 2026-11-26
+- Usa `suggested_value` en los selectores de entidades opcionales de `ConfigFlow` y `OptionsFlow` para evitar errores con `default=None` y permitir limpiar campos opcionales en la UI.
+- Reporta explícitamente el motivo cuando el sensor de consumo diario no tiene unidad `kWh`/`Wh` en lugar de enmascararlo como `INSUFFICIENT_HISTORY`.
+- Auto-desactiva `Control real del inversor` con `WARNING` si se elimina la entidad destino del Deye en Opciones.
+- Cambia el título de nuevas entradas a `Solar Battery Manager`.
+
 ## [0.2.6] — 2026-11-26
 - **Auditoría limpia (Logbook + Store)**: persiste en `Store` las últimas 20 acciones reales (`action_history`) y emite eventos en el **Logbook** únicamente cuando cambia el valor escrito o se produce un error deduplicado (evitando 288 entradas/día). Añade `after_dependencies: ["logbook"]` en `manifest.json`.
 - **Validación de unidades flexible**: `ConfigFlow` y `OptionsFlow` permiten `unit_of_measurement` ausente en entidades `number` opcionales de Deye/corriente, rechazando únicamente unidades incompatibles.

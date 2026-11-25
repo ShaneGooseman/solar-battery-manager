@@ -532,6 +532,14 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
         )
         schedule_state = evaluate_schedule(now_utc, schedule_cfg)
 
+        # Auto-disable real control if target Deye entity was removed from options
+        if self._real_control_enabled and not self._cfg(CONF_DEYE_PROGRAM_SOC_ENTITY):
+            _LOGGER.warning(
+                "Disabling real inverter control because target Deye Program SOC entity is no longer configured."
+            )
+            self._real_control_enabled = False
+            await self._async_save_storage()
+
         # Clear latch once outside the overnight tariff window
         if not schedule_state.in_tariff_window and self._latched_night_date is not None:
             self._latched_night_date = None
@@ -619,6 +627,11 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
         load_state = self.hass.states.get(load_entity)
         load_unit = load_state.attributes.get("unit_of_measurement") if load_state else None
         load_scale = _energy_unit_scale(str(load_unit) if load_unit is not None else None)
+        load_unit_err: str | None = (
+            None
+            if load_scale is not None
+            else f"Load entity '{load_entity}' has missing or unsupported energy unit ({load_unit!r})."
+        )
 
         lookback_days = int(self._cfg(CONF_LOOKBACK_DAYS, DEFAULT_LOOKBACK_DAYS))
         min_history_days = int(self._cfg(CONF_MIN_HISTORY_DAYS, DEFAULT_MIN_HISTORY_DAYS))
@@ -662,6 +675,23 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 is_valid=False,
                 status_code=CalculationStatus.INVALID_SUN_WINDOW,
                 reason=sun_err,
+                target_soc_pct=None,
+                target_soc_raw=None,
+                surplus_kwh=None,
+                solar_soc_gain_pct=None,
+                grid_energy_required_kwh=None,
+                pv_forecast_kwh=pv_forecast_kwh,
+                current_soc_pct=current_soc_pct,
+                load_estimation=None,
+                calculated_at=schedule_state.now_local,
+                target_night_date=schedule_state.target_night_date,
+                config_snapshot=battery_cfg,
+            )
+        elif load_unit_err is not None:
+            live_result = CalculationResult(
+                is_valid=False,
+                status_code=CalculationStatus.INVALID_CONFIG,
+                reason=load_unit_err,
                 target_soc_pct=None,
                 target_soc_raw=None,
                 surplus_kwh=None,

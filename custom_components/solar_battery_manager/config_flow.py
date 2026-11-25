@@ -188,6 +188,14 @@ def _validate_parameters(
     return errors
 
 
+def _optional_entity_key(key: str, defaults: dict[str, Any]) -> vol.Optional:
+    """Build an optional schema key using suggested_value to allow clearing in UI."""
+    val = defaults.get(key)
+    if val:
+        return vol.Optional(key, description={"suggested_value": val})
+    return vol.Optional(key)
+
+
 def _entities_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     """Build schema for selecting source entities."""
     defaults = defaults or {}
@@ -197,9 +205,8 @@ def _entities_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 CONF_PV_FORECAST_ENTITY,
                 default=defaults.get(CONF_PV_FORECAST_ENTITY),
             ): EntitySelector(EntitySelectorConfig(domain="sensor")),
-            vol.Optional(
-                CONF_PV_PRODUCTION_TODAY_ENTITY,
-                default=defaults.get(CONF_PV_PRODUCTION_TODAY_ENTITY),
+            _optional_entity_key(
+                CONF_PV_PRODUCTION_TODAY_ENTITY, defaults
             ): EntitySelector(EntitySelectorConfig(domain="sensor")),
             vol.Required(
                 CONF_LOAD_ENERGY_ENTITY,
@@ -209,13 +216,11 @@ def _entities_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 CONF_BATTERY_SOC_ENTITY,
                 default=defaults.get(CONF_BATTERY_SOC_ENTITY),
             ): EntitySelector(EntitySelectorConfig(domain="sensor")),
-            vol.Optional(
-                CONF_GRID_CHARGE_CURRENT_ENTITY,
-                default=defaults.get(CONF_GRID_CHARGE_CURRENT_ENTITY),
+            _optional_entity_key(
+                CONF_GRID_CHARGE_CURRENT_ENTITY, defaults
             ): EntitySelector(EntitySelectorConfig(domain=["number", "sensor"])),
-            vol.Optional(
-                CONF_DEYE_PROGRAM_SOC_ENTITY,
-                default=defaults.get(CONF_DEYE_PROGRAM_SOC_ENTITY),
+            _optional_entity_key(
+                CONF_DEYE_PROGRAM_SOC_ENTITY, defaults
             ): EntitySelector(EntitySelectorConfig(domain="number")),
             vol.Required(
                 CONF_SUN_ENTITY,
@@ -358,7 +363,7 @@ class SolarBatteryManagerConfigFlow(ConfigFlow, domain=DOMAIN):
             if not errors:
                 full_data = {**self._entity_data, **user_input}
                 return self.async_create_entry(
-                    title="Solar Battery Manager (Simulation)",
+                    title="Solar Battery Manager",
                     data=full_data,
                 )
 

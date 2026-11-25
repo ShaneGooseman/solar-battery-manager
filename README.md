@@ -4,8 +4,8 @@
 
 Integración personalizada para **Home Assistant Core (2026.11+)** que estima el excedente fotovoltaico diurno del día siguiente y calcula el **SOC objetivo mínimo** al finalizar la ventana económica nocturna (por defecto `00:00–08:00`) para que la producción solar pueda llevar la batería al 100 %.
 
-> **Modo actual: Solo lectura y simulación (`v0.1.5`)**
-> Esta versión **no escribe en el inversor** ni modifica parámetros de protección del BMS. Todos los cálculos y recomendaciones se exponen como sensores de solo lectura para validación.
+> **Estado actual: Simulación por defecto con control real opt-in (`v0.2.1`)**
+> El interruptor **`Control real del inversor`** viene **desactivado por defecto** (modo simulación sin escrituras). Solo si lo activas manualmente, la integración actualizará `number.inversordeye_program_1_soc` verificando cada escritura. Nunca modifica protecciones ni parámetros del BMS.
 
 ---
 
@@ -63,8 +63,13 @@ hora_inicio       = max(inicio_tarifa, fin_tarifa - duracion_min)
 
 Si `duracion_min` supera la duración de la ventana económica, se fija el inicio al principio de la ventana (`00:00`) y se indica en los atributos (`can_reach_target_in_window: false`).
 
-### 8. Congelación pre-medianoche
-Al llegar la hora de congelación configurada (por defecto `23:55`), el **SOC objetivo** queda congelado y guardado en el almacenamiento interno de Home Assistant para toda la ventana nocturna (`00:00–08:00`), evitando que los reinicios diarios de sensores a las `00:00` o un reinicio de Home Assistant alteren el objetivo.
+### 8. Congelación pre-medianoche y pausa diurna
+- **Congelación (`23:55`)**: al llegar la hora de congelación configurada, el **SOC objetivo** queda congelado y guardado en el almacenamiento interno de Home Assistant para toda la ventana nocturna (`00:00–08:00`), evitando que los reinicios diarios de sensores a las `00:00` o un reinicio de Home Assistant alteren el objetivo.
+- **Pausa durante la ventana solar (amanecer–atardecer)**: una vez asegurado el SOC de reposo diurno, la integración pausa las consultas al `recorder` y el recálculo continuo mientras hay luz solar (`solar_window_paused: true`), actualizando únicamente **`Error de previsión FV`** en memoria. Al atardecer reanuda el cálculo automáticamente.
+- **Control opt-in del Deye (`Control real del inversor`, apagado por defecto)**:
+  - Antes de la hora recomendada de inicio y fuera de `00:00–08:00`: mantiene el **SOC mínimo de reposo nocturno** (`20 %` por defecto).
+  - Al llegar la hora recomendada (`should_charge_now: true`): aplica el **SOC objetivo** sobre la entidad configurada (`number.inversordeye_program_1_soc`) y verifica 2 s después que el valor fue aceptado.
+  - Si falta algún dato válido (`Cálculo listo: off`), nunca ordena carga (`fail_safe_hold`).
 
 ---
 
@@ -98,8 +103,10 @@ Supongamos:
 | `SOC objetivo a las 08:00` | `sensor` (`%`) | SOC objetivo calculado + atributos de trazabilidad y congelación |
 | `Energía de red simulada necesaria` | `sensor` (`kWh`) | Energía teórica necesaria desde red respecto al SOC actual |
 | `Hora de inicio de carga recomendada` | `sensor` (`timestamp`) | Hora calculada para iniciar carga según amperaje máximo |
-| `Estado del modelo` | `sensor` (`enum`) | Estado del cálculo (`Correcto`, `Histórico insuficiente`, etc.) |
+| `Error de previsión FV` | `sensor` (`kWh`) | Diferencia entre producción real hoy y previsión congelada anoche |
+| `Estado del modelo` | `sensor` (`enum`) | Estado del cálculo, pausa solar y última acción de control |
 | `Cálculo listo` | `binary_sensor` | Indica si el cálculo actual es válido y utilizable |
+| `Control real del inversor` | `switch` | Interruptor opt-in para habilitar escritura en Program 1 SOC (OFF por defecto) |
 
 ---
 

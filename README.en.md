@@ -4,8 +4,8 @@
 
 Custom integration for **Home Assistant Core (2026.11+)** that estimates next-day daytime photovoltaic surplus and calculates the **minimum target SOC** at the end of the off-peak grid window (default `00:00–08:00`) so solar generation can charge the battery to 100%.
 
-> **Current mode: Read-only simulation (`v0.1.5`)**
-> This version **never writes to the inverter** and never modifies BMS protection parameters. All calculations and recommendations are exposed as read-only entities for validation.
+> **Current status: Simulation by default with opt-in real control (`v0.2.1`)**
+> The **`Real inverter control`** switch is **OFF by default** (read-only simulation). Only if you explicitly enable it will the integration update `number.inversordeye_program_1_soc` with post-write verification. It never modifies BMS or inverter protections.
 
 ---
 
@@ -63,8 +63,13 @@ start_time      = max(tariff_start, tariff_end - duration_min)
 
 If `duration_min` exceeds the off-peak window length, start time is clamped to `tariff_start` (`00:00`) and flagged in entity attributes (`can_reach_target_in_window: false`).
 
-### 8. Pre-midnight target freeze
-When the configured freeze time is reached (default `23:55`), the **target SOC** is frozen and persisted in Home Assistant storage for the entire overnight window (`00:00–08:00`), preventing midnight sensor resets or Home Assistant restarts from altering the target.
+### 8. Pre-midnight freeze & daytime solar pause
+- **Freeze (`23:55`)**: when the configured freeze time is reached, the **target SOC** is frozen and persisted in Home Assistant storage for the entire overnight window (`00:00–08:00`), preventing midnight sensor resets or Home Assistant restarts from altering the target.
+- **Daytime solar pause (sunrise–sunset)**: once daytime idle SOC is ensured, the integration pauses `recorder` queries and SOC recalculation during solar hours (`solar_window_paused: true`), updating only **`PV forecast error`** in memory. It resumes automatically at sunset.
+- **Opt-in Deye control (`Real inverter control`, OFF by default)**:
+  - Before the recommended start time and outside `00:00–08:00`: keeps **night idle SOC** (`20%` default).
+  - Once the recommended start time is reached (`should_charge_now: true`): writes the **target SOC** to the configured entity (`number.inversordeye_program_1_soc`) and verifies 2s later that it was accepted.
+  - If any input is invalid (`Calculation ready: off`), it never orders grid charging (`fail_safe_hold`).
 
 ---
 
@@ -98,8 +103,10 @@ Assume:
 | `Target SOC at 08:00` | `sensor` (`%`) | Calculated target SOC + traceability and freeze attributes |
 | `Simulated grid energy required` | `sensor` (`kWh`) | Theoretical grid energy needed from current SOC |
 | `Recommended charge start` | `sensor` (`timestamp`) | Calculated start time based on max charging current |
-| `Model status` | `sensor` (`enum`) | Calculation status (`OK`, `Insufficient history`, etc.) |
+| `PV forecast error` | `sensor` (`kWh`) | Difference between today's actual PV and yesterday's frozen forecast |
+| `Model status` | `sensor` (`enum`) | Calculation status, solar pause, and last control action |
 | `Calculation ready` | `binary_sensor` | Indicates whether current calculation is valid and usable |
+| `Real inverter control` | `switch` | Opt-in switch to enable Program 1 SOC writes (OFF by default) |
 
 ---
 

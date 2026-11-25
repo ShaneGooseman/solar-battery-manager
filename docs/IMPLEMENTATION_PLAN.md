@@ -1,48 +1,24 @@
-# Plan de implementación
+# Plan de implementación — Estado actual (v0.2.1)
 
-## Fase 0 — Inspección y decisiones
-- Revisar versión exacta de Home Assistant Core.
-- Confirmar integración y entidades disponibles.
-- Confirmar atributos/unidades/estadísticas de sensores de producción y consumo.
-- Revisar estado real de la automatización que guarda `input_number.soc_objetivo_nocturno`.
-- Definir cómo se consultarán estadísticas históricas desde la integración.
+## Fase 0 — Inspección y decisiones (Completada)
+- Confirmada versión base **Home Assistant Core 2026.11**.
+- Confirmadas entidades reales de Solarman/Deye (`sensor.inversordeye_*`, `number.inversordeye_program_1_soc`, `number.inversordeye_battery_grid_charging_current`), previsión ML (`sensor.pv_forecast_total_tomorrow`) y `sun.sun`.
+- Definida consulta al Recorder mediante `get_instance(hass).async_add_executor_job(statistics_during_period, ...)`.
 
-Entregable: decisiones técnicas y mapa de entidades verificado.
+## Fase 1 — Integración base y motor puro (Completada)
+- Motor puro desacoplado en `custom_components/solar_battery_manager/engine/` + 36 pruebas unitarias en `tests/unit/`.
+- Config Flow / Options Flow por UI, multiidioma (ES/EN), dispositivo de servicio, icono local y compatibilidad con HACS.
 
-## Fase 1 — Integración en modo solo lectura
-- Crear estructura `custom_components/solar_battery_manager/`.
-- Config Flow para seleccionar sensores y parámetros.
-- Coordinator para leer sensores.
-- Módulo puro de cálculos energéticos.
-- Sensores de previsión, consumo, excedente y SOC objetivo.
-- Diagnósticos y logs.
-- Sin escritura a ninguna entidad del inversor.
+## Fase 2 — Persistencia, simulación y pausa solar (Completada)
+- Congelación diaria pre-medianoche (`23:55`) persistida en `Store`.
+- Cálculo de `Hora de inicio de carga recomendada` según amperaje máximo de carga.
+- Sensor diagnóstico `Error de previsión FV` comparando producción real frente a previsión congelada.
+- Pausa automática de recálculo y consultas al Recorder durante la ventana solar (amanecer–atardecer).
 
-Entregable: integración instalable y entidades de cálculo.
+## Fase 3 — Validación en vivo (En curso)
+- Observar varios días en modo simulación (`Control real del inversor = OFF`), comparando `Error de previsión FV` y ajustando capacidad útil, eficiencia y margen si es necesario.
 
-## Fase 2 — Persistencia y simulación
-- Persistir el SOC objetivo diario calculado.
-- Congelar objetivo antes de medianoche.
-- Simular ventana de red 00:00–08:00.
-- Calcular energía teórica necesaria para llegar al SOC objetivo.
-- Registrar previsión frente a resultado real.
-
-Entregable: historial de simulación y dashboard recomendado.
-
-## Fase 3 — Validación
-- Ejecutar varios días, incluyendo días despejados y nublados.
-- Comparar producción prevista y real.
-- Comparar consumo previsto y real.
-- Ajustar capacidad útil, eficiencia y margen con datos reales.
-- No activar control automático todavía.
-
-Criterio de salida: precisión y comportamiento suficientemente estables y entendidos por el usuario.
-
-## Fase 4 — Adaptador de control Deye (solo con autorización)
-- Investigar entidad/servicio de control real disponible en la instalación.
-- Implementar adaptador separado del motor de cálculo.
-- Añadir enable switch, límites, timeout, verificación de escritura y fallback seguro.
-- Mantener protecciones del inversor/BMS intactas.
-- Pruebas supervisadas y plan de reversión.
-
-Entregable: control opt-in, documentado y desactivado por defecto.
+## Fase 4 — Adaptador de control Deye opt-in (Implementado en v0.2.0, desactivado por defecto)
+- Implementado `DeyeProgramSocController` + interruptor `Control real del inversor` (`OFF` por defecto).
+- Mantiene `night_idle_soc` (`20 %`) hasta la hora recomendada de inicio, aplica `target_soc_pct` en `number.inversordeye_program_1_soc` con verificación tras escritura y restaura `20 %` al salir de la ventana.
+- Activar el interruptor únicamente tras validar la Fase 3.

@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 import math
+from zoneinfo import ZoneInfo
 
 from .estimator import estimate_daytime_load
 from .models import (
     BatteryConfig,
     CalculationResult,
     CalculationStatus,
+    ChargeSchedulePlan,
     DaytimeLoadSample,
     EstimationMethod,
     LoadEstimationResult,
+    ScheduleState,
+    TariffScheduleConfig,
 )
 
 
@@ -188,4 +192,134 @@ def calculate_target_soc(
         calculated_at=calculated_at,
         target_night_date=target_night_date,
         config_snapshot=config,
+    )
+
+
+def plan_charge_window(
+    *,
+    result: CalculationResult,
+    schedule_state: ScheduleState,
+    schedule_config: TariffScheduleConfig,
+    charging_current_a: float | None,
+    nominal_voltage_v: float = 51.2,
+    buffer_minutes: int = 15,
+) -> ChargeSchedulePlan:
+    """Calculate when grid charging must start to reach target SOC by window end."""
+    tz = ZoneInfo(schedule_config.timezone)
+    end_date = schedule_state.target_night_date
+    start_date = (
+        end_date - timedelta(days=1)
+        if schedule_config.tariff_start >= schedule_config.tariff_end
+        else end_date
+    )
+    window_start_at = datetime.combine(start_date, schedule_config.tariff_start, tzinfo=tz)
+    window_end_at = datetime.combine(end_date, schedule_config.tariff_end, tzinfo=tz)
+
+    if (
+        not result.is_valid
+        or result.target_soc_pct is None
+        or result.current_soc_pct is None
+        or result.config_snapshot is None
+    ):
+        return ChargeSchedulePlan(
+            is_valid=False,
+            reason="Target SOC or current SOC is unavailable.",
+            charging_current_a=charging_current_a,
+            nominal_voltage_v=nominal_voltage_v,
+            charging_power_kw=None,
+            estimated_duration_minutes=None,
+            recommended_start_at=None,
+            window_start_at=window_start_at,
+            window_end_at=window_end_at,
+            can_reach_target_in_window=None,
+            should_charge_now=False,
+        )
+
+    if (
+        charging_current_a is None
+        or isinstance(charging_current_a, bool)
+        or not math.isfinite(charging_current_a)
+        or charging_current_a <= 0
+    ):
+        return ChargeSchedulePlan(
+            is_valid=False,
+            reason="charging_current_a must be a finite number > 0.",
+            charging_current_a=charging_current_a,
+            nominal_voltage_v=nominal_voltage_v,
+            charging_power_kw=None,
+            estimated_duration_minutes=None,
+            recommended_start_at=None,
+            window_start_at=window_start_at,
+            window_end_at=window_end_at,
+            can_reach_target_in_window=None,
+            should_charge_now=False,
+        )
+
+    if not math.isfinite(nominal_voltage_v) or nominal_voltage_v <= 0 or buffer_minutes < 0:
+        return ChargeSchedulePlan(
+            is_valid=False,
+            reason="Invalid nominal_voltage_v or buffer_minutes.",
+            charging_current_a=charging_current_a,
+            nominal_voltage_v=nominal_voltage_v,
+            charging_power_kw=None,
+            estimated_duration_minutes=None,
+            recommended_start_at=None,
+            window_start_at=window_start_at,
+            window_end_at=window_end_at,
+            can_reach_target_in_window=None,
+            should_charge_now=False,
+        )
+
+    charging_power_kw = (float(charging_current_a) * float(nominal_voltage_v)) / 1000.0
+    delta_soc = max(0.0, float(result.target_soc_pct) - float(result.current_soc_pct))
+
+    if delta_soc <= 0.0:
+        return ChargeSchedulePlan(
+            is_valid=True,
+            reason="Current SOC already meets or exceeds target SOC.",
+            charging_current_a=float(charging_current_a),
+            nominal_voltage_v=float(nominal_voltage_v),
+            charging_power_kw=charging_power_kw,
+            estimated_duration_minutes=0,
+            recommended_start_at=window_end_at,
+            window_start_at=window_start_at,
+            window_end_at=window_end_at,
+            can_reach_target_in_window=True,
+            should_charge_now=False,
+        )
+
+    net_energy_kwh = (delta_soc / 100.0) * result.config_snapshot.usable_battery_kwh
+    raw_minutes = (net_energy_kwh / charging_power_kw) * 60.0
+    total_minutes = math.ceil(raw_minutes) + int(buffer_minutes)
+
+    ideal_start = window_end_at - timedelta(minutes=total_minutes)
+    can_reach = ideal_start >= window_start_at
+    recommended_start_at = max(window_start_at, ideal_start)
+
+    now_local = schedule_state.now_local
+    should_charge_now = (
+        schedule_state.in_tariff_window
+        and now_local >= recommended_start_at
+        and now_local < window_end_at
+    )
+
+    reason = (
+        f"Need {total_minutes} min at {charging_power_kw:.2f} kW "
+        f"({charging_current_a:.0f} A @ {nominal_voltage_v:.1f} V)."
+    )
+    if not can_reach:
+        reason += " Warning: required duration exceeds tariff window."
+
+    return ChargeSchedulePlan(
+        is_valid=True,
+        reason=reason,
+        charging_current_a=float(charging_current_a),
+        nominal_voltage_v=float(nominal_voltage_v),
+        charging_power_kw=charging_power_kw,
+        estimated_duration_minutes=total_minutes,
+        recommended_start_at=recommended_start_at,
+        window_start_at=window_start_at,
+        window_end_at=window_end_at,
+        can_reach_target_in_window=can_reach,
+        should_charge_now=should_charge_now,
     )

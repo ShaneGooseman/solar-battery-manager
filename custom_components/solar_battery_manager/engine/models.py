@@ -171,6 +171,23 @@ class ScheduleState:
 
 
 @dataclass(frozen=True, slots=True)
+class ChargeSchedulePlan:
+    """Explainable start-time plan based on max grid charging current."""
+
+    is_valid: bool
+    reason: str
+    charging_current_a: float | None
+    nominal_voltage_v: float
+    charging_power_kw: float | None
+    estimated_duration_minutes: int | None
+    recommended_start_at: datetime | None
+    window_start_at: datetime | None
+    window_end_at: datetime | None
+    can_reach_target_in_window: bool | None
+    should_charge_now: bool
+
+
+@dataclass(frozen=True, slots=True)
 class CalculationResult:
     """Full, explainable output of a target SOC calculation."""
 

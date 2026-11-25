@@ -15,10 +15,13 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
+    CONF_BATTERY_NOMINAL_VOLTAGE,
     CONF_BATTERY_SOC_ENTITY,
     CONF_CHARGE_EFFICIENCY,
+    CONF_CHARGE_TIME_BUFFER_MINUTES,
     CONF_ESTIMATION_METHOD,
     CONF_FREEZE_TIME,
+    CONF_GRID_CHARGE_CURRENT_ENTITY,
     CONF_LOAD_ENERGY_ENTITY,
     CONF_LOOKBACK_DAYS,
     CONF_MAX_OPERATIONAL_SOC,
@@ -31,9 +34,12 @@ from .const import (
     CONF_TARIFF_END,
     CONF_TARIFF_START,
     CONF_USABLE_BATTERY_KWH,
+    DEFAULT_BATTERY_NOMINAL_VOLTAGE,
     DEFAULT_CHARGE_EFFICIENCY_PCT,
+    DEFAULT_CHARGE_TIME_BUFFER_MINUTES,
     DEFAULT_ESTIMATION_METHOD,
     DEFAULT_FREEZE_TIME,
+    DEFAULT_GRID_CHARGE_CURRENT_A,
     DEFAULT_LOOKBACK_DAYS,
     DEFAULT_MAX_OPERATIONAL_SOC,
     DEFAULT_MIN_HISTORY_DAYS,
@@ -50,11 +56,12 @@ from .const import (
     STORAGE_VERSION,
 )
 from .control import ControlActionRecord, ReadOnlySimulationController
-from .engine.calculator import calculate_target_soc
+from .engine.calculator import calculate_target_soc, plan_charge_window
 from .engine.models import (
     BatteryConfig,
     CalculationResult,
     CalculationStatus,
+    ChargeSchedulePlan,
     DaytimeLoadSample,
     EstimationMethod,
     LoadEstimationResult,
@@ -100,6 +107,7 @@ class CoordinatorData:
     live_result: CalculationResult
     effective_result: CalculationResult
     schedule_state: ScheduleState
+    charge_plan: ChargeSchedulePlan
     is_frozen: bool
     simulation_mode: bool
     last_action: ControlActionRecord | None
@@ -313,6 +321,27 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 await self._async_save_frozen(live_result)
                 is_frozen = True
 
+        current_entity = self._cfg(CONF_GRID_CHARGE_CURRENT_ENTITY)
+        if current_entity:
+            charging_current_a, _, _ = _parse_float_state(self.hass, str(current_entity))
+        else:
+            charging_current_a = DEFAULT_GRID_CHARGE_CURRENT_A
+
+        nominal_voltage_v = float(
+            self._cfg(CONF_BATTERY_NOMINAL_VOLTAGE, DEFAULT_BATTERY_NOMINAL_VOLTAGE)
+        )
+        buffer_minutes = int(
+            self._cfg(CONF_CHARGE_TIME_BUFFER_MINUTES, DEFAULT_CHARGE_TIME_BUFFER_MINUTES)
+        )
+        charge_plan = plan_charge_window(
+            result=effective_result,
+            schedule_state=schedule_state,
+            schedule_config=schedule_cfg,
+            charging_current_a=charging_current_a,
+            nominal_voltage_v=nominal_voltage_v,
+            buffer_minutes=buffer_minutes,
+        )
+
         last_action = self.controller.last_action
         if (
             schedule_state.in_tariff_window
@@ -329,6 +358,7 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
             live_result=live_result,
             effective_result=effective_result,
             schedule_state=schedule_state,
+            charge_plan=charge_plan,
             is_frozen=is_frozen,
             simulation_mode=self.controller.is_simulation,
             last_action=last_action,

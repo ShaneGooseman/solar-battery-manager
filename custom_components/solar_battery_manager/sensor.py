@@ -75,6 +75,23 @@ def _load_forecast_attrs(data: CoordinatorData) -> dict[str, Any]:
     }
 
 
+def _charge_plan_attrs(data: CoordinatorData) -> dict[str, Any]:
+    plan = data.charge_plan
+    return {
+        "charging_current_a": plan.charging_current_a,
+        "nominal_voltage_v": plan.nominal_voltage_v,
+        "charging_power_kw": (
+            round(plan.charging_power_kw, 2) if plan.charging_power_kw is not None else None
+        ),
+        "estimated_duration_minutes": plan.estimated_duration_minutes,
+        "can_reach_target_in_window": plan.can_reach_target_in_window,
+        "should_charge_now": plan.should_charge_now,
+        "window_start_at": plan.window_start_at.isoformat() if plan.window_start_at else None,
+        "window_end_at": plan.window_end_at.isoformat() if plan.window_end_at else None,
+        "reason": plan.reason,
+    }
+
+
 SENSOR_DESCRIPTIONS: tuple[SolarBatterySensorDescription, ...] = (
     SolarBatterySensorDescription(
         key="pv_forecast_tomorrow",
@@ -141,6 +158,13 @@ SENSOR_DESCRIPTIONS: tuple[SolarBatterySensorDescription, ...] = (
         ),
     ),
     SolarBatterySensorDescription(
+        key="recommended_charge_start",
+        translation_key="recommended_charge_start",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        value_fn=lambda d: d.charge_plan.recommended_start_at,
+        attrs_fn=_charge_plan_attrs,
+    ),
+    SolarBatterySensorDescription(
         key="model_status",
         translation_key="model_status",
         device_class=SensorDeviceClass.ENUM,
@@ -189,7 +213,7 @@ class SolarBatterySensor(CoordinatorEntity[SolarBatteryCoordinator], SensorEntit
             name="Solar Battery Manager",
             manufacturer="Solar Battery Manager",
             model="Simulation Mode (Read-Only)",
-            sw_version="0.1.2",
+            sw_version="0.1.3",
             entry_type=DeviceEntryType.SERVICE,
         )
 

@@ -7,7 +7,8 @@
         "data": {
           "pv_forecast_entity": "Sensor de previsión FV para mañana",
           "load_energy_entity": "Sensor de energía de consumo de la vivienda (histórico diurno)",
-          "battery_soc_entity": "Sensor de SOC de batería"
+          "battery_soc_entity": "Sensor de SOC de batería",
+          "grid_charge_current_entity": "Entidad de corriente máxima de carga desde red (opcional)"
         }
       },
       "parameters": {
@@ -19,6 +20,8 @@
           "safety_margin_soc": "Margen de seguridad (% SOC)",
           "min_operational_soc": "SOC mínimo operativo (%)",
           "max_operational_soc": "SOC máximo operativo (%)",
+          "battery_nominal_voltage": "Tensión nominal de batería (V)",
+          "charge_time_buffer_minutes": "Margen de tiempo de carga (minutos)",
           "estimation_method": "Método de estimación de consumo diurno",
           "lookback_days": "Días de histórico a consultar",
           "min_history_days": "Mínimo de días válidos requeridos",
@@ -48,11 +51,14 @@
           "pv_forecast_entity": "Sensor de previsión FV para mañana",
           "load_energy_entity": "Sensor de energía de consumo de la vivienda (histórico diurno)",
           "battery_soc_entity": "Sensor de SOC de batería",
+          "grid_charge_current_entity": "Entidad de corriente máxima de carga desde red (opcional)",
           "usable_battery_kwh": "Capacidad útil de batería (kWh)",
           "charge_efficiency": "Eficiencia de carga (%)",
           "safety_margin_soc": "Margen de seguridad (% SOC)",
           "min_operational_soc": "SOC mínimo operativo (%)",
           "max_operational_soc": "SOC máximo operativo (%)",
+          "battery_nominal_voltage": "Tensión nominal de batería (V)",
+          "charge_time_buffer_minutes": "Margen de tiempo de carga (minutos)",
           "estimation_method": "Método de estimación de consumo diurno",
           "lookback_days": "Días de histórico a consultar",
           "min_history_days": "Mínimo de días válidos requeridos",
@@ -93,6 +99,9 @@
       },
       "grid_energy_required": {
         "name": "Energía de red simulada necesaria"
+      },
+      "recommended_charge_start": {
+        "name": "Hora de inicio de carga recomendada"
       },
       "model_status": {
         "name": "Estado del modelo",

@@ -22,10 +22,13 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
+    CONF_BATTERY_NOMINAL_VOLTAGE,
     CONF_BATTERY_SOC_ENTITY,
     CONF_CHARGE_EFFICIENCY,
+    CONF_CHARGE_TIME_BUFFER_MINUTES,
     CONF_ESTIMATION_METHOD,
     CONF_FREEZE_TIME,
+    CONF_GRID_CHARGE_CURRENT_ENTITY,
     CONF_LOAD_ENERGY_ENTITY,
     CONF_LOOKBACK_DAYS,
     CONF_MAX_OPERATIONAL_SOC,
@@ -38,7 +41,9 @@ from .const import (
     CONF_TARIFF_END,
     CONF_TARIFF_START,
     CONF_USABLE_BATTERY_KWH,
+    DEFAULT_BATTERY_NOMINAL_VOLTAGE,
     DEFAULT_CHARGE_EFFICIENCY_PCT,
+    DEFAULT_CHARGE_TIME_BUFFER_MINUTES,
     DEFAULT_ESTIMATION_METHOD,
     DEFAULT_FREEZE_TIME,
     DEFAULT_LOOKBACK_DAYS,
@@ -130,6 +135,10 @@ def _entities_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 CONF_BATTERY_SOC_ENTITY,
                 default=defaults.get(CONF_BATTERY_SOC_ENTITY),
             ): EntitySelector(EntitySelectorConfig(domain="sensor")),
+            vol.Optional(
+                CONF_GRID_CHARGE_CURRENT_ENTITY,
+                default=defaults.get(CONF_GRID_CHARGE_CURRENT_ENTITY),
+            ): EntitySelector(EntitySelectorConfig(domain=["number", "sensor"])),
         }
     )
 
@@ -168,6 +177,20 @@ def _parameters_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 default=defaults.get(CONF_MAX_OPERATIONAL_SOC, DEFAULT_MAX_OPERATIONAL_SOC),
             ): NumberSelector(
                 NumberSelectorConfig(min=50.0, max=100.0, step=1.0, mode=NumberSelectorMode.BOX)
+            ),
+            vol.Required(
+                CONF_BATTERY_NOMINAL_VOLTAGE,
+                default=defaults.get(CONF_BATTERY_NOMINAL_VOLTAGE, DEFAULT_BATTERY_NOMINAL_VOLTAGE),
+            ): NumberSelector(
+                NumberSelectorConfig(min=12.0, max=100.0, step=0.1, mode=NumberSelectorMode.BOX)
+            ),
+            vol.Required(
+                CONF_CHARGE_TIME_BUFFER_MINUTES,
+                default=defaults.get(
+                    CONF_CHARGE_TIME_BUFFER_MINUTES, DEFAULT_CHARGE_TIME_BUFFER_MINUTES
+                ),
+            ): NumberSelector(
+                NumberSelectorConfig(min=0, max=120, step=5, mode=NumberSelectorMode.BOX)
             ),
             vol.Required(
                 CONF_ESTIMATION_METHOD,

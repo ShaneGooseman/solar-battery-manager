@@ -165,7 +165,7 @@ class DeyeProgramSocController:
                 {"entity_id": self._entity_id, "value": target_soc_pct},
                 blocking=True,
             )
-            for _ in range(10):
+            for _ in range(5):
                 await asyncio.sleep(1.0)
                 verified_state = self._hass.states.get(self._entity_id)
                 observed_state = verified_state.state if verified_state else None

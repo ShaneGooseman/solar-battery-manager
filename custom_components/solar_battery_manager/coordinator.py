@@ -8,6 +8,8 @@ import logging
 import math
 from typing import Any
 
+from zoneinfo import ZoneInfo
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, UnitOfEnergy
 from homeassistant.core import HomeAssistant
@@ -56,6 +58,7 @@ from .const import (
     DEFAULT_USABLE_BATTERY_KWH,
     DOMAIN,
     MAX_BATTERY_SOC_AGE,
+    MAX_PRODUCTION_AGE,
     MAX_PV_FORECAST_AGE,
     STORAGE_KEY_PREFIX,
     STORAGE_VERSION,
@@ -69,6 +72,7 @@ from .control import (
 from .engine.calculator import (
     calculate_forecast_error,
     calculate_target_soc,
+    check_state_freshness,
     decide_program_soc_action,
     plan_charge_window,
 )
@@ -102,13 +106,14 @@ def _parse_float_state(
         return None, None, f"entity_missing:{entity_id}"
     if state_obj.state in (STATE_UNKNOWN, STATE_UNAVAILABLE, "", None):
         return None, None, f"entity_{state_obj.state}:{entity_id}"
-    if max_age is not None and now_utc is not None and state_obj.last_updated is not None:
-        last_upd = (
-            state_obj.last_updated
-            if state_obj.last_updated.tzinfo is not None
-            else state_obj.last_updated.replace(tzinfo=timezone.utc)
+    if max_age is not None and now_utc is not None:
+        fresh = check_state_freshness(
+            last_reported=getattr(state_obj, "last_reported", None),
+            last_updated=state_obj.last_updated,
+            max_age=max_age,
+            now_utc=now_utc,
         )
-        if (now_utc - last_upd) > max_age:
+        if not fresh:
             return None, None, f"stale_state:{entity_id}"
     try:
         value = float(state_obj.state)
@@ -264,11 +269,12 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
             # Restore night idle SOC on explicit switch-off before returning to simulation
             idle_soc = int(round(float(self._cfg(CONF_NIGHT_IDLE_SOC, DEFAULT_NIGHT_IDLE_SOC))))
             controller = self._get_deye_controller(str(target_entity))
+            local_now = datetime.now(ZoneInfo(self.hass.config.time_zone))
             await controller.async_apply_program_soc(
                 action="restore_idle_on_disable",
                 target_soc_pct=idle_soc,
                 reason="Real inverter control disabled by user; restoring night idle SOC.",
-                now=datetime.now(timezone.utc),
+                now=local_now,
             )
 
         self._real_control_enabled = enabled
@@ -377,28 +383,28 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 return self._get_deye_controller(str(deye_entity))
         return self._sim_controller
 
-    def _record_today_pv_and_compare_yesterday(
+    def _capture_pv_at_freeze_and_compare_yesterday(
         self,
+        *,
         local_date: date,
         now_utc: datetime,
+        should_capture_today: bool,
     ) -> tuple[ForecastComparison, bool]:
-        """Track today's peak PV production and compare yesterday's completed day."""
+        """Capture today's PV total once at pre-midnight freeze and compare yesterday."""
         today_key = local_date.isoformat()
         pv_updated = False
-        prod_today_entity = self._cfg(CONF_PV_PRODUCTION_TODAY_ENTITY)
-        if prod_today_entity:
-            prod_raw, prod_unit, prod_err = _parse_float_state(
-                self.hass,
-                str(prod_today_entity),
-                max_age=MAX_PV_FORECAST_AGE,
-                now_utc=now_utc,
-            )
-            prod_scale = _energy_unit_scale(prod_unit)
-            if prod_err is None and prod_raw is not None and prod_scale is not None:
-                actual_kwh = round(prod_raw * prod_scale, 2)
-                prev_max = self._actual_pv_by_date.get(today_key)
-                if prev_max is None or actual_kwh > prev_max:
-                    self._actual_pv_by_date[today_key] = actual_kwh
+        if should_capture_today and today_key not in self._actual_pv_by_date:
+            prod_today_entity = self._cfg(CONF_PV_PRODUCTION_TODAY_ENTITY)
+            if prod_today_entity:
+                prod_raw, prod_unit, prod_err = _parse_float_state(
+                    self.hass,
+                    str(prod_today_entity),
+                    max_age=MAX_PRODUCTION_AGE,
+                    now_utc=now_utc,
+                )
+                prod_scale = _energy_unit_scale(prod_unit)
+                if prod_err is None and prod_raw is not None and prod_scale is not None:
+                    self._actual_pv_by_date[today_key] = round(prod_raw * prod_scale, 2)
                     pv_updated = True
 
         yesterday_key = (local_date - timedelta(days=1)).isoformat()
@@ -458,9 +464,13 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
             self._latched_night_date = None
             await self._async_save_storage()
 
-        forecast_comparison, pv_updated = self._record_today_pv_and_compare_yesterday(
-            schedule_state.now_local.date(),
-            now_utc,
+        should_capture_pv = (
+            schedule_state.is_freeze_active and not schedule_state.in_tariff_window
+        )
+        forecast_comparison, pv_updated = self._capture_pv_at_freeze_and_compare_yesterday(
+            local_date=schedule_state.now_local.date(),
+            now_utc=now_utc,
+            should_capture_today=should_capture_pv,
         )
         if pv_updated:
             await self._async_save_storage()
@@ -615,12 +625,14 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
         current_entity = self._cfg(CONF_GRID_CHARGE_CURRENT_ENTITY)
         if current_entity:
-            charging_current_a, _, _ = _parse_float_state(
+            charging_current_a, _, current_err = _parse_float_state(
                 self.hass,
                 str(current_entity),
-                max_age=MAX_PV_FORECAST_AGE,
+                max_age=None,
                 now_utc=now_utc,
             )
+            if current_err is not None:
+                _LOGGER.warning("Grid charge current entity error: %s", current_err)
         else:
             charging_current_a = DEFAULT_GRID_CHARGE_CURRENT_A
 

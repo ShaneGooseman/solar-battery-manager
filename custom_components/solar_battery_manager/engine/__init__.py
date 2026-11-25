@@ -3,6 +3,7 @@
 from .calculator import (
     calculate_forecast_error,
     calculate_target_soc,
+    check_state_freshness,
     decide_program_soc_action,
     plan_charge_window,
 )
@@ -34,6 +35,7 @@ __all__ = [
     "TariffScheduleConfig",
     "calculate_forecast_error",
     "calculate_target_soc",
+    "check_state_freshness",
     "decide_program_soc_action",
     "estimate_daytime_load",
     "evaluate_schedule",

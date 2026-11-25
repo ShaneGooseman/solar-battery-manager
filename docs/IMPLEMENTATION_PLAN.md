@@ -1,4 +1,4 @@
-# Plan de implementación — Estado actual (v0.2.1)
+# Plan de implementación — Estado actual (v0.2.3)
 
 ## Fase 0 — Inspección y decisiones (Completada)
 - Confirmada versión base **Home Assistant Core 2026.11**.
@@ -6,7 +6,7 @@
 - Definida consulta al Recorder mediante `get_instance(hass).async_add_executor_job(statistics_during_period, ...)`.
 
 ## Fase 1 — Integración base y motor puro (Completada)
-- Motor puro desacoplado en `custom_components/solar_battery_manager/engine/` + 36 pruebas unitarias en `tests/unit/`.
+- Motor puro desacoplado en `custom_components/solar_battery_manager/engine/` + suite de pruebas unitarias en `tests/unit/`.
 - Config Flow / Options Flow por UI, multiidioma (ES/EN), dispositivo de servicio, icono local y compatibilidad con HACS.
 
 ## Fase 2 — Persistencia, simulación y pausa solar (Completada)

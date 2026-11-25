@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 import math
 from zoneinfo import ZoneInfo
 
@@ -379,6 +379,32 @@ def decide_program_soc_action(
         "wait_idle_soc" if real_control_enabled else "simulate_wait_idle_soc",
         "Inside tariff window before recommended start time; allow night discharge to idle SOC.",
     )
+
+
+def check_state_freshness(
+    *,
+    last_reported: datetime | None,
+    last_updated: datetime | None,
+    max_age: timedelta | None,
+    now_utc: datetime,
+) -> bool:
+    """Return True if state is fresh (or no max_age applies).
+
+    Uses ``last_reported`` (falling back to ``last_updated``) so repeated
+    unchanged readings from Home Assistant integrations are not flagged stale.
+    """
+    if max_age is None:
+        return True
+    candidates = [dt for dt in (last_reported, last_updated) if dt is not None]
+    if not candidates:
+        return False
+    aware_candidates = [
+        dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+        for dt in candidates
+    ]
+    newest = max(aware_candidates)
+    now_aware = now_utc if now_utc.tzinfo is not None else now_utc.replace(tzinfo=timezone.utc)
+    return (now_aware - newest) <= max_age
 
 
 def calculate_forecast_error(

@@ -1,4 +1,4 @@
-# Especificación técnica — Solar Battery Manager (v0.2.1)
+# Especificación técnica — Solar Battery Manager (v0.2.3)
 
 ## 1. Comportamiento funcional
 
@@ -25,6 +25,8 @@ La integración (compatible con **Home Assistant Core 2026.11+**) realiza el sig
 - `recommended_start_at = max(window_start_at, window_end_at - timedelta(minutes=estimated_duration_minutes))`
 - `forecast_error_kwh = actual_production_kwh - forecast_kwh`
 
+> **Nota sobre limitaciones del modelo**: esta fórmula es un modelo energético simplificado. No garantiza alcanzar el 100 % si hay límites de potencia de carga, picos de consumo diurno, pérdidas adicionales o desviaciones en la previsión FV.
+
 ## 3. Entidades implementadas
 
 - `sensor` (en ES / EN mediante `translation_key`):
@@ -48,10 +50,12 @@ La integración (compatible con **Home Assistant Core 2026.11+**) realiza el sig
   - `DeyeProgramSocController`: activo solo cuando `real_control` está en `ON` y `deye_program_soc_entity` está configurada.
 - Comportamiento seguro:
   - Mantiene `night_idle_soc` (`20 %`) fuera de `00:00–08:00` y dentro de la ventana antes de `recommended_start_at`.
-  - Escribe `target_soc_pct` en `number.inversordeye_program_1_soc` cuando `should_charge_now = True` y verifica la lectura tras 2 segundos.
+  - Escribe `target_soc_pct` en `number.inversordeye_program_1_soc` cuando `should_charge_now = True`, queda enclavado (*latch*) hasta el fin de la ventana y verifica la lectura (polling hasta 5 s × 2 intentos).
+  - Al desactivar el switch manualmente, restaura `night_idle_soc` (`20 %`).
+  - Detección de obsolescencia vía `last_reported`: `24 h` (previsión FV), `30 min` (SOC batería), `6 h` (producción hoy); sin caducidad para ajustes estáticos como la corriente máxima de carga.
   - Si `Cálculo listo` es `False` o la entidad destino no está disponible, no ordena carga (`fail_safe_hold`).
   - Nunca modifica tensiones, corrientes máximas, límites BMS ni protecciones de red.
 
 ## 5. Pruebas (`tests/unit/`)
 
-36 pruebas unitarias ejecutadas con `unittest` (`test_calculator.py`, `test_estimator.py`, `test_schedule.py`, `test_charge_plan.py`, `test_history_and_control.py`, `test_control_and_forecast.py`) cubriendo fórmulas, redondeo/clamp, histórico insuficiente, ventana `Sun`, pausa solar, cálculo de hora de inicio, error de previsión y decisiones fail-safe.
+Suite de pruebas unitarias ejecutada con `unittest` (`test_calculator.py`, `test_estimator.py`, `test_schedule.py`, `test_charge_plan.py`, `test_history_and_control.py`, `test_control_and_forecast.py`) cubriendo fórmulas, redondeo/clamp, histórico insuficiente, completitud ≥ 75 %, ventana `Sun`, pausa solar, cálculo de hora de inicio, *latch*, obsolescencia, error de previsión, decisiones fail-safe y sincronización de `VERSION`.

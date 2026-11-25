@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+import json
+import pathlib
 import unittest
 from zoneinfo import ZoneInfo
 
+from custom_components.solar_battery_manager.const import VERSION
 from custom_components.solar_battery_manager.engine import (
     BatteryConfig,
     DaytimeLoadSample,
     TariffScheduleConfig,
     calculate_forecast_error,
     calculate_target_soc,
+    check_state_freshness,
     decide_program_soc_action,
     evaluate_schedule,
     plan_charge_window,
@@ -177,6 +181,49 @@ class TestControlDecisionAndForecastError(unittest.TestCase):
             calculate_forecast_error(forecast_kwh=None, actual_production_kwh=5.0),
             (None, None),
         )
+
+    def test_state_freshness_uses_last_reported_and_respects_none_max_age(self) -> None:
+        now_utc = datetime(2026, 11, 26, 1, 0, tzinfo=timezone.utc)
+        old_updated = now_utc - timedelta(hours=48)
+        recent_reported = now_utc - timedelta(minutes=5)
+
+        # Unchanged static entity reported recently -> fresh
+        self.assertTrue(
+            check_state_freshness(
+                last_reported=recent_reported,
+                last_updated=old_updated,
+                max_age=timedelta(minutes=30),
+                now_utc=now_utc,
+            )
+        )
+        # Both timestamps old -> stale
+        self.assertFalse(
+            check_state_freshness(
+                last_reported=old_updated,
+                last_updated=old_updated,
+                max_age=timedelta(hours=24),
+                now_utc=now_utc,
+            )
+        )
+        # Static setting with max_age=None -> never stale
+        self.assertTrue(
+            check_state_freshness(
+                last_reported=old_updated,
+                last_updated=old_updated,
+                max_age=None,
+                now_utc=now_utc,
+            )
+        )
+
+    def test_const_version_matches_manifest_version(self) -> None:
+        manifest_path = (
+            pathlib.Path(__file__).resolve().parents[2]
+            / "custom_components"
+            / "solar_battery_manager"
+            / "manifest.json"
+        )
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        self.assertEqual(VERSION, manifest["version"])
 
 
 if __name__ == "__main__":

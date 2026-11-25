@@ -156,21 +156,35 @@ class DeyeProgramSocController:
             self._last_action = record
             return record
 
-        await self._hass.services.async_call(
-            "number",
-            "set_value",
-            {"entity_id": self._entity_id, "value": target_soc_pct},
-            blocking=True,
-        )
-        await asyncio.sleep(2.0)
-
-        verified_state = self._hass.states.get(self._entity_id)
         verified = False
-        if verified_state is not None and verified_state.state not in ("unknown", "unavailable"):
-            try:
-                verified = abs(float(verified_state.state) - float(target_soc_pct)) < 0.5
-            except (TypeError, ValueError):
-                verified = False
+        observed_state: str | None = None
+        for attempt in range(2):
+            await self._hass.services.async_call(
+                "number",
+                "set_value",
+                {"entity_id": self._entity_id, "value": target_soc_pct},
+                blocking=True,
+            )
+            for _ in range(10):
+                await asyncio.sleep(1.0)
+                verified_state = self._hass.states.get(self._entity_id)
+                observed_state = verified_state.state if verified_state else None
+                if verified_state is not None and verified_state.state not in ("unknown", "unavailable"):
+                    try:
+                        if abs(float(verified_state.state) - float(target_soc_pct)) < 0.5:
+                            verified = True
+                            break
+                    except (TypeError, ValueError):
+                        pass
+            if verified:
+                break
+            _LOGGER.warning(
+                "Attempt %d to verify %s=%s%% failed (observed=%s)",
+                attempt + 1,
+                self._entity_id,
+                target_soc_pct,
+                observed_state,
+            )
 
         record = ControlActionRecord(
             timestamp=now,
@@ -180,7 +194,7 @@ class DeyeProgramSocController:
             reason=(
                 reason
                 if verified
-                else f"Write to '{self._entity_id}' could not be verified (observed={verified_state.state if verified_state else None})."
+                else f"Write to '{self._entity_id}' could not be verified after retry (observed={observed_state})."
             ),
             verified=verified,
         )

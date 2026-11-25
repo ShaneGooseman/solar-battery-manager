@@ -33,34 +33,34 @@ class TestHistoryAggregation(unittest.TestCase):
 
     def test_aggregates_only_solar_hours_and_ignores_night(self) -> None:
         tz = ZoneInfo("Europe/Madrid")
-        # Day 2026-11-24: night hours (02:00, 22:00) + solar hours (09:00, 12:00)
+        # Day 2026-11-24: solar window 08:00-12:00 (4h) -> 3h valid (75%) passes
         rows = [
             {"start": datetime(2026, 11, 24, 2, 0, tzinfo=tz), "change": 3.0},
+            {"start": datetime(2026, 11, 24, 8, 0, tzinfo=tz), "change": 0.5},
             {"start": datetime(2026, 11, 24, 9, 0, tzinfo=tz), "change": 1.2},
-            {"start": datetime(2026, 11, 24, 12, 0, tzinfo=tz), "change": 0.8},
+            {"start": datetime(2026, 11, 24, 10, 0, tzinfo=tz), "change": 0.8},
             {"start": datetime(2026, 11, 24, 22, 0, tzinfo=tz), "change": 2.5},
         ]
         samples = extract_daytime_samples_from_hourly_stats(
             rows,
             solar_start=time(8, 0),
-            solar_end=time(18, 0),
+            solar_end=time(12, 0),
             timezone_name="Europe/Madrid",
             end_date_exclusive=date(2026, 11, 25),
             lookback_days=2,
         )
         self.assertEqual(len(samples), 2)
-        # 2026-11-23 has no rows -> marked invalid
         self.assertFalse(samples[0].is_valid)
         self.assertEqual(samples[0].invalid_reason, "missing_hourly_statistics")
-        # 2026-11-24 sums only 1.2 + 0.8 = 2.0 kWh
         self.assertTrue(samples[1].is_valid)
-        self.assertAlmostEqual(samples[1].kwh or 0.0, 2.0)
+        self.assertAlmostEqual(samples[1].kwh or 0.0, 2.5)
 
-    def test_converts_wh_to_kwh_and_falls_back_to_sum_diff(self) -> None:
+    def test_rejects_partial_day_below_completeness_threshold(self) -> None:
         tz = ZoneInfo("Europe/Madrid")
+        # Solar window 08:00-18:00 (10h -> requires >= 8h). Only 2h present -> rejected.
         rows = [
-            {"start": datetime(2026, 11, 24, 8, 0, tzinfo=tz), "sum": 10000.0},
-            {"start": datetime(2026, 11, 24, 9, 0, tzinfo=tz), "sum": 11500.0},
+            {"start": datetime(2026, 11, 24, 9, 0, tzinfo=tz), "change": 1.0},
+            {"start": datetime(2026, 11, 24, 10, 0, tzinfo=tz), "change": 1.0},
         ]
         samples = extract_daytime_samples_from_hourly_stats(
             rows,
@@ -69,11 +69,32 @@ class TestHistoryAggregation(unittest.TestCase):
             timezone_name="Europe/Madrid",
             end_date_exclusive=date(2026, 11, 25),
             lookback_days=1,
+        )
+        self.assertEqual(len(samples), 1)
+        self.assertFalse(samples[0].is_valid)
+        self.assertTrue(
+            (samples[0].invalid_reason or "").startswith("incomplete_solar_window_hours:")
+        )
+
+    def test_converts_wh_to_kwh_and_falls_back_to_sum_diff(self) -> None:
+        tz = ZoneInfo("Europe/Madrid")
+        rows = [
+            {"start": datetime(2026, 11, 24, 7, 0, tzinfo=tz), "sum": 9000.0},
+            {"start": datetime(2026, 11, 24, 8, 0, tzinfo=tz), "sum": 10000.0},
+            {"start": datetime(2026, 11, 24, 9, 0, tzinfo=tz), "sum": 11500.0},
+        ]
+        samples = extract_daytime_samples_from_hourly_stats(
+            rows,
+            solar_start=time(8, 0),
+            solar_end=time(10, 0),
+            timezone_name="Europe/Madrid",
+            end_date_exclusive=date(2026, 11, 25),
+            lookback_days=1,
             unit_scale_to_kwh=0.001,
         )
         self.assertEqual(len(samples), 1)
         self.assertTrue(samples[0].is_valid)
-        self.assertAlmostEqual(samples[0].kwh or 0.0, 1.5)
+        self.assertAlmostEqual(samples[0].kwh or 0.0, 2.5)
 
 
 class TestReadOnlySimulationController(unittest.TestCase):

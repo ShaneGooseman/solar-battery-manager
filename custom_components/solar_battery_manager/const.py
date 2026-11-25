@@ -5,9 +5,12 @@ from __future__ import annotations
 from datetime import timedelta
 
 DOMAIN = "solar_battery_manager"
+VERSION = "0.2.2"
 STORAGE_VERSION = 1
 STORAGE_KEY_PREFIX = f"{DOMAIN}_frozen_target"
 DEFAULT_SCAN_INTERVAL = timedelta(minutes=5)
+MAX_PV_FORECAST_AGE = timedelta(hours=24)
+MAX_BATTERY_SOC_AGE = timedelta(minutes=30)
 
 # Entity configuration keys
 CONF_PV_FORECAST_ENTITY = "pv_forecast_entity"

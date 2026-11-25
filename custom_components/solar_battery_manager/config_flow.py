@@ -89,6 +89,14 @@ def _validate_parameters(
         errors["base"] = "invalid_parameters"
         return errors
 
+    night_idle_soc = float(data.get(CONF_NIGHT_IDLE_SOC, DEFAULT_NIGHT_IDLE_SOC))
+    if (
+        night_idle_soc < battery_cfg.min_operational_soc
+        or night_idle_soc > battery_cfg.max_operational_soc
+    ):
+        errors["base"] = "invalid_parameters"
+        return errors
+
     lookback = int(data[CONF_LOOKBACK_DAYS])
     min_history = int(data[CONF_MIN_HISTORY_DAYS])
     if lookback <= 0 or min_history <= 0 or min_history > lookback:

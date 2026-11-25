@@ -4,7 +4,7 @@
 
 Integración personalizada para **Home Assistant Core (2026.11+)** que estima el excedente fotovoltaico diurno del día siguiente y calcula el **SOC objetivo mínimo** al finalizar la ventana económica nocturna (por defecto `00:00–08:00`) para que la producción solar pueda llevar la batería al 100 %.
 
-> **Estado actual: Simulación por defecto con control real opt-in (`v0.2.1`)**
+> **Estado actual: Simulación por defecto con control real opt-in (`v0.2.2`)**
 > El interruptor **`Control real del inversor`** viene **desactivado por defecto** (modo simulación sin escrituras). Solo si lo activas manualmente, la integración actualizará `number.inversordeye_program_1_soc` verificando cada escritura. Nunca modifica protecciones ni parámetros del BMS.
 
 ---

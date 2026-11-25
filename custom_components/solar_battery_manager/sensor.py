@@ -19,7 +19,7 @@ from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, VERSION
 from .coordinator import CoordinatorData, SolarBatteryCoordinator
 from .engine.models import CalculationStatus
 
@@ -95,10 +95,11 @@ def _charge_plan_attrs(data: CoordinatorData) -> dict[str, Any]:
 def _forecast_error_attrs(data: CoordinatorData) -> dict[str, Any]:
     comp = data.forecast_comparison
     return {
-        "forecast_for_today_kwh": comp.forecast_for_today_kwh,
-        "actual_production_today_kwh": comp.actual_production_today_kwh,
+        "comparison_date": comp.comparison_date,
+        "forecast_for_yesterday_kwh": comp.forecast_for_yesterday_kwh,
+        "actual_production_yesterday_kwh": comp.actual_production_yesterday_kwh,
         "forecast_error_pct": comp.forecast_error_pct,
-        "frozen_target_soc_for_today": comp.frozen_target_soc_for_today,
+        "frozen_target_soc_for_yesterday": comp.frozen_target_soc_for_yesterday,
     }
 
 
@@ -109,6 +110,7 @@ def _model_status_attrs(data: CoordinatorData) -> dict[str, Any]:
         "simulation_mode": data.simulation_mode,
         "is_frozen": data.is_frozen,
         "solar_window_paused": data.solar_window_paused,
+        "charge_latched": data.charge_latched,
         "last_control_action": action.action if action else None,
         "last_control_soc_pct": action.target_soc_pct if action else None,
         "last_control_verified": action.verified if action else None,
@@ -217,7 +219,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Solar Battery Manager sensors from a config entry."""
-    coordinator: SolarBatteryCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: SolarBatteryCoordinator = entry.runtime_data
     async_add_entities(
         SolarBatterySensor(coordinator, entry, description)
         for description in SENSOR_DESCRIPTIONS
@@ -244,7 +246,7 @@ class SolarBatterySensor(CoordinatorEntity[SolarBatteryCoordinator], SensorEntit
             name="Solar Battery Manager",
             manufacturer="Solar Battery Manager",
             model="Simulation Mode (Read-Only)",
-            sw_version="0.2.1",
+            sw_version=VERSION,
             entry_type=DeviceEntryType.SERVICE,
         )
 

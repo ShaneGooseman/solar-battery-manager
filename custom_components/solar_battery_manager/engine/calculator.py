@@ -332,11 +332,13 @@ def decide_program_soc_action(
     charge_plan: ChargeSchedulePlan,
     night_idle_soc: float,
     real_control_enabled: bool,
+    charge_latched: bool = False,
 ) -> tuple[int | None, str, str]:
     """Decide the desired Program 1 SOC and action label (pure, fail-safe).
 
-    Returns ``(desired_soc_pct, action_name, reason)``.
-    ``desired_soc_pct`` is ``None`` when no write/simulation target should be applied.
+    When ``charge_latched`` is True inside the tariff window, the target SOC is
+    held until window end to prevent chattering if actual charge power differs
+    from the estimated rate.
     """
     idle_soc = int(round(max(0.0, min(100.0, night_idle_soc))))
 
@@ -361,11 +363,15 @@ def decide_program_soc_action(
             f"Charge plan invalid ({charge_plan.reason}); refusing to order grid charge.",
         )
 
-    if charge_plan.should_charge_now:
+    if charge_plan.should_charge_now or charge_latched:
         return (
             result.target_soc_pct,
             "apply_target_soc" if real_control_enabled else "simulate_target_soc",
-            "Charge start time reached inside tariff window.",
+            (
+                "Charge latched until end of tariff window."
+                if charge_latched and not charge_plan.should_charge_now
+                else "Charge start time reached inside tariff window."
+            ),
         )
 
     return (

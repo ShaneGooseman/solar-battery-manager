@@ -13,7 +13,7 @@ from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, VERSION
 from .coordinator import SolarBatteryCoordinator
 
 
@@ -23,7 +23,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Solar Battery Manager binary sensors."""
-    coordinator: SolarBatteryCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: SolarBatteryCoordinator = entry.runtime_data
     async_add_entities([SolarBatteryReadyBinarySensor(coordinator, entry)])
 
 
@@ -50,7 +50,7 @@ class SolarBatteryReadyBinarySensor(
             name="Solar Battery Manager",
             manufacturer="Solar Battery Manager",
             model="Simulation Mode (Read-Only)",
-            sw_version="0.2.1",
+            sw_version=VERSION,
             entry_type=DeviceEntryType.SERVICE,
         )
 

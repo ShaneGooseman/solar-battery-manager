@@ -129,6 +129,18 @@ def extract_daytime_samples_from_hourly_stats(
         daily_totals[row_date] += hourly_value * unit_scale_to_kwh
         daily_hour_counts[row_date] += 1
 
+    expected_hours = max(
+        1,
+        math.ceil(
+            (
+                datetime.combine(end_date_exclusive, solar_end)
+                - datetime.combine(end_date_exclusive, solar_start)
+            ).total_seconds()
+            / 3600.0
+        ),
+    )
+    min_required_hours = max(1, math.ceil(expected_hours * 0.75))
+
     samples: list[DaytimeLoadSample] = []
     for offset in range(lookback_days):
         day = start_date_inclusive + timedelta(days=offset)
@@ -146,6 +158,17 @@ def extract_daytime_samples_from_hourly_stats(
                     kwh=None,
                     is_valid=False,
                     invalid_reason=reason,
+                )
+            )
+        elif valid_hours < min_required_hours:
+            samples.append(
+                DaytimeLoadSample(
+                    sample_date=day,
+                    kwh=None,
+                    is_valid=False,
+                    invalid_reason=(
+                        f"incomplete_solar_window_hours:{valid_hours}/{expected_hours}"
+                    ),
                 )
             )
         else:

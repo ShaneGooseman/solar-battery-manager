@@ -12,7 +12,7 @@ from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_DEYE_PROGRAM_SOC_ENTITY, DOMAIN
+from .const import CONF_DEYE_PROGRAM_SOC_ENTITY, DOMAIN, VERSION
 from .coordinator import SolarBatteryCoordinator
 
 
@@ -22,7 +22,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Solar Battery Manager switch entities."""
-    coordinator: SolarBatteryCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: SolarBatteryCoordinator = entry.runtime_data
     async_add_entities([SolarBatteryRealControlSwitch(coordinator, entry)])
 
 
@@ -49,7 +49,7 @@ class SolarBatteryRealControlSwitch(
             name="Solar Battery Manager",
             manufacturer="Solar Battery Manager",
             model="Simulation Mode (Read-Only)",
-            sw_version="0.2.1",
+            sw_version=VERSION,
             entry_type=DeviceEntryType.SERVICE,
         )
 

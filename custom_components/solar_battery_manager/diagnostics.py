@@ -8,7 +8,6 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
 from .coordinator import SolarBatteryCoordinator
 
 
@@ -17,14 +16,18 @@ async def async_get_config_entry_diagnostics(
     entry: ConfigEntry,
 ) -> dict[str, Any]:
     """Return diagnostics for a config entry (without secrets)."""
-    coordinator: SolarBatteryCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: SolarBatteryCoordinator = entry.runtime_data
     data = coordinator.data
 
     return {
         "entry_data": dict(entry.data),
         "entry_options": dict(entry.options),
-        "simulation_mode": coordinator.controller.is_simulation,
+        "real_control_enabled": coordinator.real_control_enabled,
+        "simulation_mode": not coordinator.real_control_enabled,
         "is_frozen": data.is_frozen if data else None,
+        "solar_window_paused": data.solar_window_paused if data else None,
+        "charge_latched": data.charge_latched if data else None,
+        "frozen_snapshots": coordinator.frozen_snapshots,
         "schedule_state": (
             {
                 "now_local": data.schedule_state.now_local.isoformat(),
@@ -52,6 +55,27 @@ async def async_get_config_entry_diagnostics(
             }
             if data
             else None
+        ),
+        "charge_plan": (
+            {
+                "is_valid": data.charge_plan.is_valid,
+                "reason": data.charge_plan.reason,
+                "charging_current_a": data.charge_plan.charging_current_a,
+                "charging_power_kw": data.charge_plan.charging_power_kw,
+                "estimated_duration_minutes": data.charge_plan.estimated_duration_minutes,
+                "recommended_start_at": (
+                    data.charge_plan.recommended_start_at.isoformat()
+                    if data.charge_plan.recommended_start_at
+                    else None
+                ),
+                "can_reach_target_in_window": data.charge_plan.can_reach_target_in_window,
+                "should_charge_now": data.charge_plan.should_charge_now,
+            }
+            if data
+            else None
+        ),
+        "forecast_comparison": (
+            asdict(data.forecast_comparison) if data else None
         ),
         "last_action": asdict(data.last_action) if data and data.last_action else None,
     }

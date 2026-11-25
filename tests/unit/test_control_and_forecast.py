@@ -132,6 +132,39 @@ class TestControlDecisionAndForecastError(unittest.TestCase):
         self.assertIsNone(soc)
         self.assertEqual(action, "fail_safe_hold")
 
+    def test_latched_charge_prevents_chattering_if_start_shifts_forward(self) -> None:
+        tz = ZoneInfo("Europe/Madrid")
+        schedule_cfg = TariffScheduleConfig()
+        # 05:00 inside window, should_charge_now is False (start is 05:52),
+        # but charge_latched=True must keep target_soc=60% instead of dropping to 20%.
+        now_night = datetime(2026, 11, 26, 5, 0, tzinfo=tz)
+        sched = evaluate_schedule(now_night, schedule_cfg)
+        cfg = BatteryConfig(usable_battery_kwh=12.0, charge_efficiency=0.90, safety_margin_soc=5.0)
+        res = calculate_target_soc(
+            pv_forecast_kwh=10.0,
+            load_samples=_history(4.0),
+            config=cfg,
+            current_soc_pct=40.0,
+            target_night_date=sched.target_night_date,
+        )
+        plan = plan_charge_window(
+            result=res,
+            schedule_state=sched,
+            schedule_config=schedule_cfg,
+            charging_current_a=25.0,
+        )
+        self.assertFalse(plan.should_charge_now)
+        soc, action, _ = decide_program_soc_action(
+            result=res,
+            schedule_state=sched,
+            charge_plan=plan,
+            night_idle_soc=20.0,
+            real_control_enabled=True,
+            charge_latched=True,
+        )
+        self.assertEqual(soc, 60)
+        self.assertEqual(action, "apply_target_soc")
+
     def test_forecast_error_calculation(self) -> None:
         err_kwh, err_pct = calculate_forecast_error(
             forecast_kwh=10.0,

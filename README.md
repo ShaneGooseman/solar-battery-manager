@@ -1,96 +1,80 @@
 # Solar Battery Manager
 
-[🇬🇧 English documentation](README.en.md)
+[🇬🇧 English documentation](README.en.md) · [📋 Changelog](CHANGELOG.md)
 
-Integración personalizada para **Home Assistant Core (2026.11+)** que estima el excedente fotovoltaico diurno del día siguiente y calcula el **SOC objetivo mínimo** al finalizar la ventana económica nocturna (por defecto `00:00–08:00`) para que la producción solar pueda llevar la batería al 100 %.
+Integración personalizada para **Home Assistant Core (2026.11+)** que estima cuánta energía solar sobrará mañana y calcula el **SOC mínimo necesario al final de la tarifa económica nocturna** (por defecto `08:00`) para que la producción fotovoltaica del día lleve la batería al 100 %.
 
-> **Estado actual: Simulación por defecto con control real opt-in (`v0.2.4`)**
-> El interruptor **`Control real del inversor`** viene **desactivado por defecto** (modo simulación sin escrituras). Solo si lo activas manualmente, la integración actualizará `number.inversordeye_program_1_soc` verificando cada escritura (hasta ~10 s con reintento). Al desactivar el interruptor, restaura `20 %` (`night_idle_soc`) como última escritura segura. Nunca modifica protecciones ni parámetros del BMS.
+> **Seguridad por defecto (`v0.2.4`)**: la integración funciona en **modo simulación** mientras el interruptor **`Control real del inversor`** esté apagado (`OFF` por defecto). Si decides activarlo, únicamente ajusta el SOC objetivo del tramo horario nocturno (`number.inversordeye_program_1_soc`) sin modificar nunca tensiones, corrientes máximas ni protecciones del BMS.
 
 ---
 
-## Cómo se calcula el SOC objetivo (transparencia total)
+## Cómo funciona a lo largo del día
 
-La integración **no** asume que la capacidad nominal de la batería sea la capacidad útil, ni usa el consumo total de 24 horas (ya que el consumo nocturno puede cubrirse desde la red). El cálculo sigue exactamente estos 8 pasos:
+1. **Día solar (amanecer → atardecer)**:
+   - La integración mantiene el SOC de reposo nocturno (`20 %`) y pausa las consultas al `recorder` y el recálculo continuo mientras hay luz solar (`solar_window_paused: true`).
+   - Tu inversor carga la batería con energía solar de forma normal.
+2. **Atardecer**:
+   - Captura una sola vez la producción fotovoltaica total del día (si configuraste el sensor de producción diaria) para poder calcular al día siguiente la precisión de la previsión.
+   - Reanuda el cálculo de la noche siguiente usando el histórico diurno y la previsión FV de mañana.
+3. **Congelación pre-medianoche (`23:55`)**:
+   - Congela y guarda en almacenamiento persistente el **SOC objetivo a las 08:00** para que los reinicios diarios de sensores a medianoche o un reinicio de Home Assistant no alteren el plan de esa noche.
+4. **Ventana económica nocturna (`00:00–08:00`)**:
+   - **Antes de la hora recomendada de inicio**: mantiene el **SOC mínimo de reposo nocturno** (`20 %`), permitiendo que la vivienda descargue la batería durante la noche.
+   - **Al llegar la hora recomendada** (calculada según el amperaje máximo de carga): aplica el **SOC objetivo** y queda **enclavada (*latch*)** hasta las `08:00` para evitar cortes u oscilaciones si la potencia real varía.
+   - **A las `08:00`**: restaura el SOC de reposo (`20 %`).
 
-### 1. Ventana solar diurna (`Sun`)
-A partir de la entidad `Sun` configurada (`sun.sun` por defecto), se obtienen las horas locales de **amanecer** (`next_rising`) y **atardecer** (`next_setting`).
-- Si la entidad `Sun` no existe, está `unavailable` o carece de ambos atributos, el cálculo **falla de forma segura** (`Ventana solar (Sun) no válida`) y no inventa valores.
+---
 
-### 2. Estimación del consumo diurno (`consumo_diurno_kWh`)
-Se consultan las estadísticas horarias a largo plazo del `recorder` de Home Assistant para el sensor de consumo configurado, sumando **únicamente las horas comprendidas entre el amanecer y el atardecer** de los últimos *N* días (`lookback_days`, por defecto 14).
-- Se descartan días con datos ausentes o valores negativos/no finitos (todo queda registrado en los atributos `samples_used` y `samples_discarded`).
-- Si hay menos días válidos que el mínimo exigido (`min_history_days`, por defecto 3), el cálculo falla de forma segura (`Histórico insuficiente`).
-- Se aplica el método seleccionado:
-  - **`Mediana`** *(por defecto)*: menos sensible a picos puntuales de electrodomésticos.
-  - **`Media`**: media aritmética de los días válidos.
+## Cómo se calcula el SOC objetivo (fórmulas)
 
-### 3. Excedente solar diurno estimado (`excedente_kWh`)
+La integración **no** asume que la capacidad nominal de la batería sea la capacidad útil, ni resta el consumo total de 24 h (ya que el consumo nocturno puede cubrirse desde la red).
+
+1. **Consumo diurno estimado (`consumo_diurno_kWh`)**:
+   - Lee las estadísticas horarias del `recorder` únicamente entre **amanecer y atardecer** (según `sun.sun`) de los últimos *N* días (`14` por defecto).
+   - Descarta días incompletos (`< 75 %` de horas válidas) o con valores inválidos; requiere al menos `3` días válidos.
+   - Aplica **`Mediana`** *(por defecto, resistente a picos)* o **`Media`**.
+
+2. **Excedente solar diurno estimado (`excedente_kWh`)**:
 ```text
 excedente_kWh = max(0, prevision_FV_manana_kWh - consumo_diurno_kWh)
 ```
 
-### 4. Ganancia de SOC aportada por el sol (`ganancia_SOC_%`)
+3. **Ganancia de SOC aportada por el sol (`ganancia_SOC_%`)**:
 ```text
 ganancia_SOC_% = (excedente_kWh * eficiencia_carga / capacidad_util_kWh) * 100
 ```
 
-Donde:
-- `capacidad_util_kWh` es la capacidad real utilizable configurada por el usuario (no el nominal).
-- `eficiencia_carga` es la eficiencia de carga configurada (p. ej. `0,90` para `90 %`).
-
-### 5. SOC objetivo al final de la ventana económica (`08:00`)
+4. **SOC objetivo al final de la ventana económica**:
 ```text
 SOC_bruto_%    = 100 - ganancia_SOC_% + margen_seguridad_%
 SOC_objetivo_% = round(min(SOC_max_operativo, max(SOC_min_operativo, SOC_bruto_%)))
 ```
 
-### 6. Energía de red simulada necesaria (`energia_red_kWh`)
+5. **Energía de red simulada y hora de inicio recomendada**:
 ```text
-delta_SOC       = max(0, SOC_objetivo_% - SOC_actual_%)
-energia_red_kWh = ((delta_SOC / 100) * capacidad_util_kWh) / eficiencia_carga
-```
-
-### 7. Hora de inicio de carga recomendada
-A partir de la corriente máxima de carga desde red configurada (en A) y la tensión nominal de batería (por defecto `51,2 V`):
-
-```text
+delta_SOC         = max(0, SOC_objetivo_% - SOC_actual_%)
+energia_red_kWh   = ((delta_SOC / 100) * capacidad_util_kWh) / eficiencia_carga
 potencia_carga_kW = (corriente_max_red_A * tension_nominal_V) / 1000
 energia_neta_kWh  = (delta_SOC / 100) * capacidad_util_kWh
 duracion_min      = ceil((energia_neta_kWh / potencia_carga_kW) * 60) + margen_tiempo_min
 hora_inicio       = max(inicio_tarifa, fin_tarifa - duracion_min)
 ```
 
-Si `duracion_min` supera la duración de la ventana económica, se fija el inicio al principio de la ventana (`00:00`) y se indica en los atributos (`can_reach_target_in_window: false`).
-
-### 8. Congelación pre-medianoche y pausa diurna
-- **Congelación (`23:55`)**: al llegar la hora de congelación configurada, el **SOC objetivo** queda congelado y guardado en el almacenamiento interno de Home Assistant para toda la ventana nocturna (`00:00–08:00`), evitando que los reinicios diarios de sensores a las `00:00` o un reinicio de Home Assistant alteren el objetivo.
-- **Pausa durante la ventana solar (amanecer–atardecer)**: una vez asegurado el SOC de reposo diurno, la integración pausa las consultas al `recorder` y el recálculo continuo mientras hay luz solar (`solar_window_paused: true`), actualizando únicamente **`Error de previsión FV`** en memoria. Al atardecer reanuda el cálculo automáticamente.
-- **Control opt-in del Deye (`Control real del inversor`, apagado por defecto)**:
-  - Antes de la hora recomendada de inicio y fuera de `00:00–08:00`: mantiene el **SOC mínimo de reposo nocturno** (`20 %` por defecto).
-  - Al llegar la hora recomendada (`should_charge_now: true`): aplica el **SOC objetivo** sobre `number.inversordeye_program_1_soc`, queda **enclavado (*latch*)** hasta las `08:00` para evitar oscilaciones y verifica tras escritura (hasta 5 s × 2 intentos).
-  - Si falta algún dato válido o está obsoleto (`last_reported` > 24 h en previsión o > 30 min en SOC; `Cálculo listo: off`), nunca ordena carga (`fail_safe_hold`).
-  - Al desactivar el interruptor manualmente, realiza una última escritura restaurando `night_idle_soc` (`20 %`).
+> **Nota**: es un modelo energético simplificado; no garantiza alcanzar el 100 % si hay límites de potencia del inversor/BMS o desviaciones importantes de la previsión FV.
 
 ---
 
 ### Ejemplo numérico paso a paso
 
-Supongamos:
-- Previsión FV mañana: `11,91 kWh`
-- Consumo diurno estimado (mediana): `5,10 kWh`
-- Capacidad útil configurada: `12,0 kWh` | Eficiencia: `90 %` | Margen seguridad: `5 %`
-- SOC actual: `60 %` | Corriente máx. red: `25 A` @ `51,2 V` | Margen tiempo: `15 min`
+Con previsión FV de `11,91 kWh`, consumo diurno de `5,10 kWh`, `12,0 kWh` útiles, `90 %` de eficiencia, `5 %` de margen, SOC actual `40 %` y carga a `25 A @ 51,2 V` (`15 min` de margen de tiempo):
 
 1. **Excedente**: `max(0, 11,91 - 5,10) = 6,81 kWh`
 2. **Ganancia solar**: `(6,81 * 0,90 / 12,0) * 100 = 51,08 %`
-3. **SOC objetivo**: `100 - 51,08 + 5 = 53,92 -> 54 %` *(si el SOC actual es 60 %, no requiere carga de red)*
-4. Si el SOC actual fuese **40 %** (`delta_SOC = 14 %`):
-   - Energía neta a añadir: `0,14 * 12,0 = 1,68 kWh`
-   - Energía de red estimada: `1,68 / 0,90 = 1,87 kWh`
-   - Potencia de carga: `25 * 51,2 / 1000 = 1,28 kW`
-   - Duración: `ceil((1,68 / 1,28) * 60) + 15 = 79 + 15 = 94 min`
-   - Hora de inicio recomendada (para terminar a las `08:00`): **`06:26`**
+3. **SOC objetivo**: `100 - 51,08 + 5 = 53,92 -> 54 %`
+4. **Plan de carga** (`delta_SOC = 54 - 40 = 14 %`):
+   - Energía neta: `1,68 kWh` | Energía de red estimada: `1,87 kWh`
+   - Potencia: `25 * 51,2 / 1000 = 1,28 kW`
+   - Duración: `ceil((1,68 / 1,28) * 60) + 15 = 94 min` → **Inicio recomendado: `06:26`**
 
 ---
 
@@ -99,44 +83,45 @@ Supongamos:
 | Entidad | Tipo | Descripción |
 | :--- | :--- | :--- |
 | `Previsión FV mañana` | `sensor` (`kWh`) | Previsión fotovoltaica normalizada a kWh |
-| `Consumo diurno previsto mañana` | `sensor` (`kWh`) | Consumo diurno estimado + traza de muestras usadas/descartadas |
+| `Consumo diurno previsto mañana` | `sensor` (`kWh`) | Consumo diurno estimado + traza de días usados/descartados |
 | `Excedente solar previsto mañana` | `sensor` (`kWh`) | Excedente solar diurno estimado |
 | `SOC objetivo a las 08:00` | `sensor` (`%`) | SOC objetivo calculado + atributos de trazabilidad y congelación |
 | `Energía de red simulada necesaria` | `sensor` (`kWh`) | Energía teórica necesaria desde red respecto al SOC actual |
 | `Hora de inicio de carga recomendada` | `sensor` (`timestamp`) | Hora calculada para iniciar carga según amperaje máximo |
-| `Error de previsión FV` | `sensor` (`kWh`) | Diferencia entre producción total de ayer (capturada en el freeze) y la previsión congelada para ayer |
-| `Estado del modelo` | `sensor` (`enum`) | Estado del cálculo, pausa solar y última acción de control |
+| `Error de previsión FV` | `sensor` (`kWh`) | Diferencia entre producción total de ayer y previsión congelada para ayer |
+| `Estado del modelo` | `sensor` (`enum`) | Estado del cálculo, pausa solar, *latch* y última acción de control |
 | `Cálculo listo` | `binary_sensor` | Indica si el cálculo actual es válido y utilizable |
-| `Control real del inversor` | `switch` | Interruptor opt-in para habilitar escritura en Program 1 SOC (OFF por defecto) |
+| `Control real del inversor` | `switch` | Interruptor opt-in para habilitar escritura en Program 1 SOC (`OFF` por defecto) |
+
+---
+
+## Seguridad y fallo seguro
+
+- **Validación de frescura (`last_reported`)**: si la previsión FV lleva > `24 h` sin reportarse o el SOC > `30 min`, el cálculo pasa a inválido y **no ordena carga** (`fail_safe_hold`). La corriente máxima de carga (ajuste estático) no caduca por falta de cambios.
+- **Unidades explícitas**: solo acepta sensores en `kWh` o `Wh`; si falta la unidad, falla de forma segura.
+- **Verificación de escritura**: en modo control real, espera hasta `5 s × 2 intentos` comprobando que el Deye reflejó el nuevo valor.
+- **Al apagar el interruptor**: restaura el SOC de reposo nocturno (`20 %`) como última acción segura antes de volver a simulación.
 
 ---
 
 ## Instalación mediante HACS
 
-1. Abre **HACS** en Home Assistant.
-2. Ve a **Integraciones** → menú superior derecho (`⋮`) → **Repositorios personalizados**.
-3. Añade la URL de este repositorio con categoría **Integración**.
-4. Busca **Solar Battery Manager** e instálalo.
-5. **Reinicia Home Assistant**.
-6. Ve a **Ajustes → Dispositivos y servicios → Añadir integración** y busca **Solar Battery Manager**.
+1. Abre **HACS → Integraciones → `⋮` → Repositorios personalizados**.
+2. Añade `https://github.com/ShaneGooseman/solar-battery-manager` (categoría **Integración**).
+3. Instala **Solar Battery Manager** y **reinicia Home Assistant**.
+4. Ve a **Ajustes → Dispositivos y servicios → Añadir integración → Solar Battery Manager**.
 
 ---
 
-## Pruebas unitarias (desarrollo)
-
-El motor de cálculo puro y la agregación horaria están desacoplados de Home Assistant y pueden probarse localmente con Python 3.13+:
+## Pruebas unitarias y documentación técnica
 
 ```powershell
 python -m unittest discover -s tests/unit -v
 ```
+*(En Windows requiere `tzdata` para `ZoneInfo("Europe/Madrid")`.)*
 
-*(En Windows, requiere tener instalado `tzdata` para `ZoneInfo("Europe/Madrid")`.)*
-
----
-
-## Documentación técnica
-
-- [AGENTS.md](AGENTS.md) — Reglas de seguridad y arquitectura del proyecto.
-- [docs/PROJECT_BRIEF.md](docs/PROJECT_BRIEF.md) — Contexto de la instalación.
-- [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md) — Especificación funcional.
-- [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) — Hoja de ruta incremental.
+- [CHANGELOG.md](CHANGELOG.md) — Historial de versiones.
+- [AGENTS.md](AGENTS.md) — Reglas de seguridad y arquitectura.
+- [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md) — Especificación técnica actual.
+- [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) — Estado por fases.
+- [docs/PROJECT_BRIEF.md](docs/PROJECT_BRIEF.md) — Contexto inicial de la instalación.

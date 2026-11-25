@@ -1,5 +1,7 @@
 # Project Brief — Solar Battery Manager
 
+> **Nota histórica**: este documento recoge el punto de partida inicial de la instalación antes del desarrollo de la integración. Para la arquitectura, entidades y estado actual (`v0.2.4`), consulta [TECHNICAL_SPEC.md](TECHNICAL_SPEC.md) y [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+
 ## Objetivo
 
 Crear una integración personalizada de Home Assistant que estime cuánta energía solar sobrante habrá mañana y calcule el SOC mínimo al que debe llegar la batería a las 08:00, utilizando la red durante la ventana económica nocturna (00:00–08:00) cuando sea necesario.

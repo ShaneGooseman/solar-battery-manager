@@ -26,37 +26,42 @@ It queries Home Assistant `recorder` hourly long-term statistics for the configu
   - **`Mean`**: arithmetic mean across valid days.
 
 ### 3. Estimated daytime solar surplus (`surplus_kWh`)
-$$\text{surplus\_kWh} = \max\bigl(0,\; \text{pv\_forecast\_tomorrow\_kWh} - \text{daytime\_load\_kWh}\bigr)$$
+```text
+surplus_kWh = max(0, pv_forecast_tomorrow_kWh - daytime_load_kWh)
+```
 
 ### 4. Expected solar SOC gain (`solar_soc_gain_%`)
-$$\text{solar\_soc\_gain\_\%} = \frac{\text{surplus\_kWh} \times \eta_{\text{charge}}}{\text{usable\_battery\_kWh}} \times 100$$
+```text
+solar_soc_gain_% = (surplus_kWh * charge_efficiency / usable_battery_kWh) * 100
+```
 
 Where:
-- $\text{usable\_battery\_kWh}$ is the user-configured real usable capacity (not nominal).
-- $\eta_{\text{charge}}$ is the configured charge efficiency (e.g. `0.90` for `90%`).
+- `usable_battery_kWh` is the user-configured real usable capacity (not nominal).
+- `charge_efficiency` is the configured charge efficiency (e.g. `0.90` for `90%`).
 
 ### 5. Target SOC at the end of the off-peak window (`08:00`)
-$$\text{raw\_target\_SOC\_\%} = 100 - \text{solar\_soc\_gain\_\%} + \text{safety\_margin\_\%}$$
-
-$$\text{target\_SOC\_\%} = \text{round}\Bigl(\min\bigl(\text{max\_operational\_SOC},\; \max(\text{min\_operational\_SOC},\; \text{raw\_target\_SOC\_\%})\bigr)\Bigr)$$
+```text
+raw_target_SOC_% = 100 - solar_soc_gain_% + safety_margin_%
+target_SOC_%     = round(min(max_operational_SOC, max(min_operational_SOC, raw_target_SOC_%)))
+```
 
 ### 6. Simulated grid energy required (`grid_energy_kWh`)
-$$\Delta\text{SOC} = \max\bigl(0,\; \text{target\_SOC\_\%} - \text{current\_SOC\_\%}\bigr)$$
-
-$$\text{grid\_energy\_kWh} = \frac{(\Delta\text{SOC} / 100) \times \text{usable\_battery\_kWh}}{\eta_{\text{charge}}}$$
+```text
+delta_SOC       = max(0, target_SOC_% - current_SOC_%)
+grid_energy_kWh = ((delta_SOC / 100) * usable_battery_kWh) / charge_efficiency
+```
 
 ### 7. Recommended grid charge start time
 Using the configured max grid charging current (in A) and nominal battery voltage (default `51.2 V`):
 
-$$P_{\text{charge\_kW}} = \frac{I_{\text{max\_grid\_A}} \times V_{\text{nominal\_V}}}{1000}$$
+```text
+charge_power_kW = (max_grid_current_A * nominal_voltage_V) / 1000
+net_energy_kWh  = (delta_SOC / 100) * usable_battery_kWh
+duration_min    = ceil((net_energy_kWh / charge_power_kW) * 60) + buffer_minutes
+start_time      = max(tariff_start, tariff_end - duration_min)
+```
 
-$$\text{net\_energy\_kWh} = \frac{\Delta\text{SOC}}{100} \times \text{usable\_battery\_kWh}$$
-
-$$\text{duration\_min} = \left\lceil \frac{\text{net\_energy\_kWh}}{P_{\text{charge\_kW}}} \times 60 \right\rceil + \text{buffer\_minutes}$$
-
-$$\text{start\_time} = \max\bigl(\text{tariff\_start},\; \text{tariff\_end} - \text{duration\_min}\bigr)$$
-
-If $\text{duration\_min}$ exceeds the off-peak window length, start time is clamped to `tariff_start` (`00:00`) and flagged in entity attributes (`can_reach_target_in_window: false`).
+If `duration_min` exceeds the off-peak window length, start time is clamped to `tariff_start` (`00:00`) and flagged in entity attributes (`can_reach_target_in_window: false`).
 
 ### 8. Pre-midnight target freeze
 When the configured freeze time is reached (default `23:55`), the **target SOC** is frozen and persisted in Home Assistant storage for the entire overnight window (`00:00–08:00`), preventing midnight sensor resets or Home Assistant restarts from altering the target.
@@ -71,14 +76,14 @@ Assume:
 - Usable capacity: `12.0 kWh` | Efficiency: `90%` | Safety margin: `5%`
 - Current SOC: `40%` | Max grid current: `25 A` @ `51.2 V` | Time buffer: `15 min`
 
-1. **Surplus**: $\max(0,\; 11.91 - 5.10) = \mathbf{6.81\text{ kWh}}$
-2. **Solar SOC gain**: $(6.81 \times 0.90 / 12.0) \times 100 = \mathbf{51.08\%}$
-3. **Target SOC**: $100 - 51.08 + 5 = 53.92 \rightarrow \mathbf{54\%}$
-4. **Required grid charge** ($\Delta\text{SOC} = 54 - 40 = 14\%$):
-   - Net energy to add: $0.14 \times 12.0 = 1.68\text{ kWh}$
-   - Estimated grid energy: $1.68 / 0.90 = \mathbf{1.87\text{ kWh}}$
-   - Charge power: $25 \times 51.2 / 1000 = \mathbf{1.28\text{ kW}}$
-   - Duration: $\lceil (1.68 / 1.28) \times 60 \rceil + 15 = 79 + 15 = \mathbf{94\text{ min}}$
+1. **Surplus**: `max(0, 11.91 - 5.10) = 6.81 kWh`
+2. **Solar SOC gain**: `(6.81 * 0.90 / 12.0) * 100 = 51.08%`
+3. **Target SOC**: `100 - 51.08 + 5 = 53.92 -> 54%`
+4. **Required grid charge** (`delta_SOC = 54 - 40 = 14%`):
+   - Net energy to add: `0.14 * 12.0 = 1.68 kWh`
+   - Estimated grid energy: `1.68 / 0.90 = 1.87 kWh`
+   - Charge power: `25 * 51.2 / 1000 = 1.28 kW`
+   - Duration: `ceil((1.68 / 1.28) * 60) + 15 = 79 + 15 = 94 min`
    - Recommended start time (to finish by `08:00`): **`06:26`**
 
 ---

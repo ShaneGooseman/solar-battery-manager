@@ -26,37 +26,42 @@ Se consultan las estadísticas horarias a largo plazo del `recorder` de Home Ass
   - **`Media`**: media aritmética de los días válidos.
 
 ### 3. Excedente solar diurno estimado (`excedente_kWh`)
-$$\text{excedente\_kWh} = \max\bigl(0,\; \text{previsión\_FV\_mañana\_kWh} - \text{consumo\_diurno\_kWh}\bigr)$$
+```text
+excedente_kWh = max(0, prevision_FV_manana_kWh - consumo_diurno_kWh)
+```
 
 ### 4. Ganancia de SOC aportada por el sol (`ganancia_SOC_%`)
-$$\text{ganancia\_SOC\_\%} = \frac{\text{excedente\_kWh} \times \eta_{\text{carga}}}{\text{capacidad\_útil\_kWh}} \times 100$$
+```text
+ganancia_SOC_% = (excedente_kWh * eficiencia_carga / capacidad_util_kWh) * 100
+```
 
 Donde:
-- $\text{capacidad\_útil\_kWh}$ es la capacidad real utilizable configurada por el usuario (no el nominal).
-- $\eta_{\text{carga}}$ es la eficiencia de carga configurada (p. ej. `0,90` para `90 %`).
+- `capacidad_util_kWh` es la capacidad real utilizable configurada por el usuario (no el nominal).
+- `eficiencia_carga` es la eficiencia de carga configurada (p. ej. `0,90` para `90 %`).
 
 ### 5. SOC objetivo al final de la ventana económica (`08:00`)
-$$\text{SOC\_bruto\_\%} = 100 - \text{ganancia\_SOC\_\%} + \text{margen\_seguridad\_\%}$$
+```text
+SOC_bruto_%    = 100 - ganancia_SOC_% + margen_seguridad_%
+SOC_objetivo_% = round(min(SOC_max_operativo, max(SOC_min_operativo, SOC_bruto_%)))
+```
 
-$$\text{SOC\_objetivo\_\%} = \text{redondear}\Bigl(\min\bigl(\text{SOC\_máx\_operativo},\; \max(\text{SOC\_mín\_operativo},\; \text{SOC\_bruto\_\%})\bigr)\Bigr)$$
-
-### 6. Energía de red simulada necesaria (`energía_red_kWh`)
-$$\Delta\text{SOC} = \max\bigl(0,\; \text{SOC\_objetivo\_\%} - \text{SOC\_actual\_\%}\bigr)$$
-
-$$\text{energía\_red\_kWh} = \frac{(\Delta\text{SOC} / 100) \times \text{capacidad\_útil\_kWh}}{\eta_{\text{carga}}}$$
+### 6. Energía de red simulada necesaria (`energia_red_kWh`)
+```text
+delta_SOC       = max(0, SOC_objetivo_% - SOC_actual_%)
+energia_red_kWh = ((delta_SOC / 100) * capacidad_util_kWh) / eficiencia_carga
+```
 
 ### 7. Hora de inicio de carga recomendada
 A partir de la corriente máxima de carga desde red configurada (en A) y la tensión nominal de batería (por defecto `51,2 V`):
 
-$$P_{\text{carga\_kW}} = \frac{I_{\text{máx\_red\_A}} \times V_{\text{nominal\_V}}}{1000}$$
+```text
+potencia_carga_kW = (corriente_max_red_A * tension_nominal_V) / 1000
+energia_neta_kWh  = (delta_SOC / 100) * capacidad_util_kWh
+duracion_min      = ceil((energia_neta_kWh / potencia_carga_kW) * 60) + margen_tiempo_min
+hora_inicio       = max(inicio_tarifa, fin_tarifa - duracion_min)
+```
 
-$$\text{energía\_neta\_kWh} = \frac{\Delta\text{SOC}}{100} \times \text{capacidad\_útil\_kWh}$$
-
-$$\text{duración\_min} = \left\lceil \frac{\text{energía\_neta\_kWh}}{P_{\text{carga\_kW}}} \times 60 \right\rceil + \text{margen\_tiempo\_min}$$
-
-$$\text{hora\_inicio} = \max\bigl(\text{inicio\_tarifa},\; \text{fin\_tarifa} - \text{duración\_min}\bigr)$$
-
-Si $\text{duración\_min}$ supera la duración de la ventana económica, se fija el inicio al principio de la ventana (`00:00`) y se indica en los atributos (`can_reach_target_in_window: false`).
+Si `duracion_min` supera la duración de la ventana económica, se fija el inicio al principio de la ventana (`00:00`) y se indica en los atributos (`can_reach_target_in_window: false`).
 
 ### 8. Congelación pre-medianoche
 Al llegar la hora de congelación configurada (por defecto `23:55`), el **SOC objetivo** queda congelado y guardado en el almacenamiento interno de Home Assistant para toda la ventana nocturna (`00:00–08:00`), evitando que los reinicios diarios de sensores a las `00:00` o un reinicio de Home Assistant alteren el objetivo.
@@ -71,14 +76,14 @@ Supongamos:
 - Capacidad útil configurada: `12,0 kWh` | Eficiencia: `90 %` | Margen seguridad: `5 %`
 - SOC actual: `60 %` | Corriente máx. red: `25 A` @ `51,2 V` | Margen tiempo: `15 min`
 
-1. **Excedente**: $\max(0,\; 11,91 - 5,10) = \mathbf{6,81\text{ kWh}}$
-2. **Ganancia solar**: $(6,81 \times 0,90 / 12,0) \times 100 = \mathbf{51,08\text{ \%}}$
-3. **SOC objetivo**: $100 - 51,08 + 5 = 53,92 \rightarrow \mathbf{54\text{ \%}}$ *(si el SOC actual es 60 %, no requiere carga de red)*
-4. Si el SOC actual fuese **40 %** ($\Delta\text{SOC} = 14\text{ \%}$):
-   - Energía neta a añadir: $0,14 \times 12,0 = 1,68\text{ kWh}$
-   - Energía de red estimada: $1,68 / 0,90 = \mathbf{1,87\text{ kWh}}$
-   - Potencia de carga: $25 \times 51,2 / 1000 = \mathbf{1,28\text{ kW}}$
-   - Duración: $\lceil (1,68 / 1,28) \times 60 \rceil + 15 = 79 + 15 = \mathbf{94\text{ min}}$
+1. **Excedente**: `max(0, 11,91 - 5,10) = 6,81 kWh`
+2. **Ganancia solar**: `(6,81 * 0,90 / 12,0) * 100 = 51,08 %`
+3. **SOC objetivo**: `100 - 51,08 + 5 = 53,92 -> 54 %` *(si el SOC actual es 60 %, no requiere carga de red)*
+4. Si el SOC actual fuese **40 %** (`delta_SOC = 14 %`):
+   - Energía neta a añadir: `0,14 * 12,0 = 1,68 kWh`
+   - Energía de red estimada: `1,68 / 0,90 = 1,87 kWh`
+   - Potencia de carga: `25 * 51,2 / 1000 = 1,28 kW`
+   - Duración: `ceil((1,68 / 1,28) * 60) + 15 = 79 + 15 = 94 min`
    - Hora de inicio recomendada (para terminar a las `08:00`): **`06:26`**
 
 ---

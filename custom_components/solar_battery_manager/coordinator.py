@@ -31,8 +31,6 @@ from .const import (
     CONF_MIN_OPERATIONAL_SOC,
     CONF_PV_FORECAST_ENTITY,
     CONF_SAFETY_MARGIN_SOC,
-    CONF_SOLAR_WINDOW_END,
-    CONF_SOLAR_WINDOW_START,
     CONF_SUN_ENTITY,
     CONF_TARIFF_END,
     CONF_TARIFF_START,
@@ -49,8 +47,7 @@ from .const import (
     DEFAULT_MIN_OPERATIONAL_SOC,
     DEFAULT_SAFETY_MARGIN_SOC,
     DEFAULT_SCAN_INTERVAL,
-    DEFAULT_SOLAR_WINDOW_END,
-    DEFAULT_SOLAR_WINDOW_START,
+    DEFAULT_SUN_ENTITY,
     DEFAULT_TARIFF_END,
     DEFAULT_TARIFF_START,
     DEFAULT_USABLE_BATTERY_KWH,
@@ -277,23 +274,25 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
             str(self._cfg(CONF_ESTIMATION_METHOD, DEFAULT_ESTIMATION_METHOD))
         )
 
-        load_samples: list[DaytimeLoadSample] = []
-        if load_scale is not None:
-            fallback_start = time.fromisoformat(
-                str(self._cfg(CONF_SOLAR_WINDOW_START, DEFAULT_SOLAR_WINDOW_START))
-            )
-            fallback_end = time.fromisoformat(
-                str(self._cfg(CONF_SOLAR_WINDOW_END, DEFAULT_SOLAR_WINDOW_END))
-            )
-            sun_entity = self._cfg(CONF_SUN_ENTITY)
-            sun_state = self.hass.states.get(str(sun_entity)) if sun_entity else None
-            solar_start, solar_end, _ = resolve_solar_window_from_sun(
-                sun_state.attributes.get("next_rising") if sun_state else None,
-                sun_state.attributes.get("next_setting") if sun_state else None,
+        sun_entity = str(self._cfg(CONF_SUN_ENTITY, DEFAULT_SUN_ENTITY))
+        sun_state = self.hass.states.get(sun_entity)
+        sun_err: str | None = None
+        solar_start: time | None = None
+        solar_end: time | None = None
+
+        if sun_state is None or sun_state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            sun_err = f"Sun entity '{sun_entity}' is missing or unavailable."
+        else:
+            solar_start, solar_end, sun_err_code = resolve_solar_window_from_sun(
+                sun_state.attributes.get("next_rising"),
+                sun_state.attributes.get("next_setting"),
                 self.hass.config.time_zone,
-                fallback_start,
-                fallback_end,
             )
+            if sun_err_code is not None:
+                sun_err = f"Sun entity '{sun_entity}' error: {sun_err_code}."
+
+        load_samples: list[DaytimeLoadSample] = []
+        if sun_err is None and load_scale is not None and solar_start is not None and solar_end is not None:
             load_samples = await async_fetch_daytime_load_history(
                 self.hass,
                 entity_id=load_entity,
@@ -305,17 +304,35 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 now=now_utc,
             )
 
-        live_result = calculate_target_soc(
-            pv_forecast_kwh=pv_forecast_kwh,
-            load_samples=load_samples,
-            config=battery_cfg,
-            current_soc_pct=current_soc_pct,
-            estimation_method=method,
-            lookback_days=lookback_days,
-            min_history_days=min_history_days,
-            calculated_at=schedule_state.now_local,
-            target_night_date=schedule_state.target_night_date,
-        )
+        if sun_err is not None:
+            live_result = CalculationResult(
+                is_valid=False,
+                status_code=CalculationStatus.INVALID_SUN_WINDOW,
+                reason=sun_err,
+                target_soc_pct=None,
+                target_soc_raw=None,
+                surplus_kwh=None,
+                solar_soc_gain_pct=None,
+                grid_energy_required_kwh=None,
+                pv_forecast_kwh=pv_forecast_kwh,
+                current_soc_pct=current_soc_pct,
+                load_estimation=None,
+                calculated_at=schedule_state.now_local,
+                target_night_date=schedule_state.target_night_date,
+                config_snapshot=battery_cfg,
+            )
+        else:
+            live_result = calculate_target_soc(
+                pv_forecast_kwh=pv_forecast_kwh,
+                load_samples=load_samples,
+                config=battery_cfg,
+                current_soc_pct=current_soc_pct,
+                estimation_method=method,
+                lookback_days=lookback_days,
+                min_history_days=min_history_days,
+                calculated_at=schedule_state.now_local,
+                target_night_date=schedule_state.target_night_date,
+            )
 
         is_frozen = False
         effective_result = live_result

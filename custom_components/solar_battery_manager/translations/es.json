@@ -30,22 +30,17 @@
           "estimation_method": "Método de estimación de consumo diurno",
           "lookback_days": "Días de histórico a consultar",
           "min_history_days": "Mínimo de días válidos requeridos",
-          "solar_window_start": "Inicio de ventana solar",
-          "solar_window_end": "Fin de ventana solar",
           "tariff_start": "Inicio de tarifa económica",
           "tariff_end": "Fin de tarifa económica",
           "freeze_time": "Hora de congelación pre-medianoche"
-        },
-        "data_description": {
-          "grid_charge_current_entity": "Entidad del inversor con los amperios máximos de carga desde red (ej. number.inversordeye_battery_grid_charging_current).",
-          "sun_entity": "Entidad de la integración Sun (sun.sun) para obtener automáticamente amanecer y atardecer. Si no se indica, se usan las horas manuales de respaldo."
         }
       }
     },
     "error": {
       "invalid_entity": "La entidad seleccionada no existe o no es válida.",
+      "invalid_sun_entity": "La entidad Sun seleccionada no existe o no tiene los atributos de amanecer/atardecer (next_rising, next_setting).",
       "invalid_parameters": "Uno o más parámetros de batería están fuera de rango.",
-      "invalid_schedule": "Los horarios de ventana solar o tarifa no son válidos."
+      "invalid_schedule": "Los horarios de tarifa no son válidos."
     },
     "abort": {
       "already_configured": "Solar Battery Manager ya está configurado."
@@ -72,21 +67,20 @@
           "estimation_method": "Método de estimación de consumo diurno",
           "lookback_days": "Días de histórico a consultar",
           "min_history_days": "Mínimo de días válidos requeridos",
-          "solar_window_start": "Inicio de ventana solar",
-          "solar_window_end": "Fin de ventana solar",
           "tariff_start": "Inicio de tarifa económica",
           "tariff_end": "Fin de tarifa económica",
           "freeze_time": "Hora de congelación pre-medianoche"
         },
         "data_description": {
           "grid_charge_current_entity": "Entidad del inversor con los amperios máximos de carga desde red (ej. number.inversordeye_battery_grid_charging_current).",
-          "sun_entity": "Entidad de la integración Sun (sun.sun) para obtener automáticamente amanecer y atardecer. Si no se indica, se usan las horas manuales de respaldo."
+          "sun_entity": "Entidad de la integración Sun (sun.sun) para obtener automáticamente amanecer y atardecer."
         }
       }
     },
     "error": {
+      "invalid_sun_entity": "La entidad Sun seleccionada no existe o no tiene los atributos de amanecer/atardecer (next_rising, next_setting).",
       "invalid_parameters": "Uno o más parámetros de batería están fuera de rango.",
-      "invalid_schedule": "Los horarios de ventana solar o tarifa no son válidos."
+      "invalid_schedule": "Los horarios de tarifa no son válidos."
     }
   },
   "selector": {
@@ -124,6 +118,7 @@
           "invalid_config": "Configuración no válida",
           "invalid_pv_forecast": "Previsión FV no válida",
           "invalid_current_soc": "SOC actual no válido",
+          "invalid_sun_window": "Ventana solar (Sun) no válida",
           "insufficient_history": "Histórico insuficiente"
         }
       }

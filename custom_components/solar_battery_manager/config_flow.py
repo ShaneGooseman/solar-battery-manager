@@ -36,8 +36,6 @@ from .const import (
     CONF_MIN_OPERATIONAL_SOC,
     CONF_PV_FORECAST_ENTITY,
     CONF_SAFETY_MARGIN_SOC,
-    CONF_SOLAR_WINDOW_END,
-    CONF_SOLAR_WINDOW_START,
     CONF_SUN_ENTITY,
     CONF_TARIFF_END,
     CONF_TARIFF_START,
@@ -52,8 +50,6 @@ from .const import (
     DEFAULT_MIN_HISTORY_DAYS,
     DEFAULT_MIN_OPERATIONAL_SOC,
     DEFAULT_SAFETY_MARGIN_SOC,
-    DEFAULT_SOLAR_WINDOW_END,
-    DEFAULT_SOLAR_WINDOW_START,
     DEFAULT_SUN_ENTITY,
     DEFAULT_TARIFF_END,
     DEFAULT_TARIFF_START,
@@ -61,6 +57,7 @@ from .const import (
     DOMAIN,
 )
 from .engine.models import BatteryConfig, EstimationMethod, TariffScheduleConfig
+from .history import resolve_solar_window_from_sun
 
 
 def _parse_time_str(value: str | time) -> time:
@@ -95,16 +92,10 @@ def _validate_parameters(
         return errors
 
     try:
-        solar_start = _parse_time_str(data[CONF_SOLAR_WINDOW_START])
-        solar_end = _parse_time_str(data[CONF_SOLAR_WINDOW_END])
         tariff_start = _parse_time_str(data[CONF_TARIFF_START])
         tariff_end = _parse_time_str(data[CONF_TARIFF_END])
         freeze_time = _parse_time_str(data[CONF_FREEZE_TIME])
     except ValueError:
-        errors["base"] = "invalid_schedule"
-        return errors
-
-    if solar_start >= solar_end:
         errors["base"] = "invalid_schedule"
         return errors
 
@@ -141,7 +132,7 @@ def _entities_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 CONF_GRID_CHARGE_CURRENT_ENTITY,
                 default=defaults.get(CONF_GRID_CHARGE_CURRENT_ENTITY),
             ): EntitySelector(EntitySelectorConfig(domain=["number", "sensor"])),
-            vol.Optional(
+            vol.Required(
                 CONF_SUN_ENTITY,
                 default=defaults.get(CONF_SUN_ENTITY, DEFAULT_SUN_ENTITY),
             ): EntitySelector(EntitySelectorConfig(domain="sun")),
@@ -221,14 +212,6 @@ def _parameters_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 NumberSelectorConfig(min=1, max=30, step=1, mode=NumberSelectorMode.BOX)
             ),
             vol.Required(
-                CONF_SOLAR_WINDOW_START,
-                default=defaults.get(CONF_SOLAR_WINDOW_START, DEFAULT_SOLAR_WINDOW_START),
-            ): TimeSelector(),
-            vol.Required(
-                CONF_SOLAR_WINDOW_END,
-                default=defaults.get(CONF_SOLAR_WINDOW_END, DEFAULT_SOLAR_WINDOW_END),
-            ): TimeSelector(),
-            vol.Required(
                 CONF_TARIFF_START,
                 default=defaults.get(CONF_TARIFF_START, DEFAULT_TARIFF_START),
             ): TimeSelector(),
@@ -271,6 +254,20 @@ class SolarBatteryManagerConfigFlow(ConfigFlow, domain=DOMAIN):
                 if not entity_id or self.hass.states.get(entity_id) is None:
                     errors["base"] = "invalid_entity"
                     break
+
+            if not errors:
+                sun_entity = user_input.get(CONF_SUN_ENTITY)
+                sun_state = self.hass.states.get(sun_entity) if sun_entity else None
+                if sun_state is None:
+                    errors["base"] = "invalid_sun_entity"
+                else:
+                    _, _, sun_err = resolve_solar_window_from_sun(
+                        sun_state.attributes.get("next_rising"),
+                        sun_state.attributes.get("next_setting"),
+                        self.hass.config.time_zone,
+                    )
+                    if sun_err is not None:
+                        errors["base"] = "invalid_sun_entity"
 
             if not errors:
                 self._entity_data = user_input
@@ -322,7 +319,21 @@ class SolarBatteryManagerOptionsFlow(OptionsFlow):
         merged = {**self.config_entry.data, **self.config_entry.options}
 
         if user_input is not None:
-            errors = _validate_parameters(user_input, self.hass.config.time_zone)
+            sun_entity = user_input.get(CONF_SUN_ENTITY)
+            sun_state = self.hass.states.get(sun_entity) if sun_entity else None
+            if sun_state is None:
+                errors["base"] = "invalid_sun_entity"
+            else:
+                _, _, sun_err = resolve_solar_window_from_sun(
+                    sun_state.attributes.get("next_rising"),
+                    sun_state.attributes.get("next_setting"),
+                    self.hass.config.time_zone,
+                )
+                if sun_err is not None:
+                    errors["base"] = "invalid_sun_entity"
+
+            if not errors:
+                errors = _validate_parameters(user_input, self.hass.config.time_zone)
             if not errors:
                 return self.async_create_entry(title="", data=user_input)
 

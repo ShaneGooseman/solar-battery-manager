@@ -23,6 +23,7 @@ class CalculationStatus(StrEnum):
     INVALID_CONFIG = "invalid_config"
     INVALID_PV_FORECAST = "invalid_pv_forecast"
     INVALID_CURRENT_SOC = "invalid_current_soc"
+    INVALID_SUN_WINDOW = "invalid_sun_window"
     INSUFFICIENT_HISTORY = "insufficient_history"
 
 

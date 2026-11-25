@@ -30,22 +30,17 @@
           "estimation_method": "Daytime load estimation method",
           "lookback_days": "History lookback (days)",
           "min_history_days": "Minimum valid history days",
-          "solar_window_start": "Solar generation window start",
-          "solar_window_end": "Solar generation window end",
           "tariff_start": "Economic tariff start",
           "tariff_end": "Economic tariff end",
           "freeze_time": "Pre-midnight target freeze time"
-        },
-        "data_description": {
-          "grid_charge_current_entity": "Inverter entity with the max grid charging current in Amperes (e.g. number.inversordeye_battery_grid_charging_current).",
-          "sun_entity": "Optional Sun integration entity (sun.sun) to automatically derive sunrise and sunset. Manual solar window hours are used as fallback."
         }
       }
     },
     "error": {
       "invalid_entity": "Selected entity was not found or is invalid.",
+      "invalid_sun_entity": "Selected Sun entity does not exist or lacks sunrise/sunset attributes (next_rising, next_setting).",
       "invalid_parameters": "One or more battery or schedule parameters are out of range.",
-      "invalid_schedule": "Tariff or solar window times are invalid."
+      "invalid_schedule": "Tariff schedule times are invalid."
     },
     "abort": {
       "already_configured": "Solar Battery Manager is already configured."
@@ -72,21 +67,20 @@
           "estimation_method": "Daytime load estimation method",
           "lookback_days": "History lookback (days)",
           "min_history_days": "Minimum valid history days",
-          "solar_window_start": "Solar generation window start",
-          "solar_window_end": "Solar generation window end",
           "tariff_start": "Economic tariff start",
           "tariff_end": "Economic tariff end",
           "freeze_time": "Pre-midnight target freeze time"
         },
         "data_description": {
           "grid_charge_current_entity": "Inverter entity with the max grid charging current in Amperes (e.g. number.inversordeye_battery_grid_charging_current).",
-          "sun_entity": "Optional Sun integration entity (sun.sun) to automatically derive sunrise and sunset. Manual solar window hours are used as fallback."
+          "sun_entity": "Sun integration entity (sun.sun) used to obtain sunrise and sunset times."
         }
       }
     },
     "error": {
+      "invalid_sun_entity": "Selected Sun entity does not exist or lacks sunrise/sunset attributes (next_rising, next_setting).",
       "invalid_parameters": "One or more battery or schedule parameters are out of range.",
-      "invalid_schedule": "Tariff or solar window times are invalid."
+      "invalid_schedule": "Tariff schedule times are invalid."
     }
   },
   "selector": {
@@ -124,6 +118,7 @@
           "invalid_config": "Invalid configuration",
           "invalid_pv_forecast": "Invalid PV forecast",
           "invalid_current_soc": "Invalid current SOC",
+          "invalid_sun_window": "Invalid Sun solar window",
           "insufficient_history": "Insufficient history"
         }
       }

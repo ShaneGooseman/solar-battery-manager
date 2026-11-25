@@ -213,7 +213,7 @@ class SolarBatterySensor(CoordinatorEntity[SolarBatteryCoordinator], SensorEntit
             name="Solar Battery Manager",
             manufacturer="Solar Battery Manager",
             model="Simulation Mode (Read-Only)",
-            sw_version="0.1.4",
+            sw_version="0.1.5",
             entry_type=DeviceEntryType.SERVICE,
         )
 

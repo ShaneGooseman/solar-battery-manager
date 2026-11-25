@@ -22,12 +22,13 @@ def resolve_solar_window_from_sun(
     next_rising_raw: Any,
     next_setting_raw: Any,
     timezone_name: str,
-    fallback_start: time,
-    fallback_end: time,
-) -> tuple[time, time, bool]:
-    """Derive local solar window [sunrise, sunset) from Sun entity attributes."""
+) -> tuple[time | None, time | None, str | None]:
+    """Derive local solar window [sunrise, sunset) from Sun entity attributes.
+
+    Returns ``(sunrise_time, sunset_time, error_reason)``.
+    """
     if not next_rising_raw or not next_setting_raw:
-        return fallback_start, fallback_end, False
+        return None, None, "sun_entity_missing_rising_or_setting_attributes"
     try:
         tz = ZoneInfo(timezone_name)
         rising_dt = (
@@ -41,14 +42,14 @@ def resolve_solar_window_from_sun(
             else datetime.fromisoformat(str(next_setting_raw))
         )
         if rising_dt.tzinfo is None or setting_dt.tzinfo is None:
-            return fallback_start, fallback_end, False
+            return None, None, "sun_entity_attributes_must_be_timezone_aware"
         start_t = rising_dt.astimezone(tz).time().replace(tzinfo=None, microsecond=0)
         end_t = setting_dt.astimezone(tz).time().replace(tzinfo=None, microsecond=0)
         if start_t >= end_t:
-            return fallback_start, fallback_end, False
-        return start_t, end_t, True
+            return None, None, "sun_entity_sunrise_not_before_sunset"
+        return start_t, end_t, None
     except (TypeError, ValueError):
-        return fallback_start, fallback_end, False
+        return None, None, "sun_entity_invalid_datetime_attributes"
 
 
 def _parse_stat_start(raw_start: Any, tz: ZoneInfo) -> datetime | None:

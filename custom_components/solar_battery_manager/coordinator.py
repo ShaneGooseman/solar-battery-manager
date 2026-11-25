@@ -464,17 +464,6 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
             self._latched_night_date = None
             await self._async_save_storage()
 
-        should_capture_pv = (
-            schedule_state.is_freeze_active and not schedule_state.in_tariff_window
-        )
-        forecast_comparison, pv_updated = self._capture_pv_at_freeze_and_compare_yesterday(
-            local_date=schedule_state.now_local.date(),
-            now_utc=now_utc,
-            should_capture_today=should_capture_pv,
-        )
-        if pv_updated:
-            await self._async_save_storage()
-
         sun_entity = str(self._cfg(CONF_SUN_ENTITY, DEFAULT_SUN_ENTITY))
         sun_state = self.hass.states.get(sun_entity)
         sun_err: str | None = None
@@ -491,6 +480,18 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
             )
             if sun_err_code is not None:
                 sun_err = f"Sun entity '{sun_entity}' error: {sun_err_code}."
+
+        local_t = schedule_state.now_local.time().replace(tzinfo=None)
+        should_capture_pv = (
+            solar_end is not None and local_t >= solar_end
+        ) or (schedule_state.is_freeze_active and not schedule_state.in_tariff_window)
+        forecast_comparison, pv_updated = self._capture_pv_at_freeze_and_compare_yesterday(
+            local_date=schedule_state.now_local.date(),
+            now_utc=now_utc,
+            should_capture_today=should_capture_pv,
+        )
+        if pv_updated:
+            await self._async_save_storage()
 
         # Pause heavy Recorder queries and SOC recalculation during daytime solar hours
         # once initial data is available and night idle SOC has been restored.

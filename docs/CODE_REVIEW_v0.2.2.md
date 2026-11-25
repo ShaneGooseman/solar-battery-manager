@@ -10,6 +10,8 @@
 | **Estado del árbol** | Limpio (sin cambios locales) |
 
 > Este informe evalúa la v0.2.2 **respecto al informe anterior de la v0.2.1**. El informe previo tenía 17 hallazgos numerados; aquí se indica el estado de cada uno y se documentan los problemas nuevos introducidos por las correcciones.
+>
+> **Actualización (2026-11-26):** la v0.2.3 (`27fbb50`) corrige N1–N8. La verificación posterior está en la sección [Actualización v0.2.3](#actualización-v023--verificación-posterior), a continuación del veredicto.
 
 ---
 
@@ -19,7 +21,36 @@ De los 17 hallazgos anteriores: **7 corregidos, 8 parcialmente corregidos y 2 si
 
 La corrección del *chattering* del Program SOC funciona (verificado con simulación: de 20 escrituras a 1). Sin embargo, la solución de datos obsoletos introduce una **regresión crítica** que puede impedir por completo la carga desde red en modo de control real (N1), y el nuevo registro de producción diaria tiene un fallo en el cambio de medianoche (N2). El resto de hallazgos nuevos son de severidad media o baja.
 
-**Recomendación:** no activar el control real (`Control real del inversor`) hasta corregir N1 y N2.
+**Recomendación (v0.2.2):** no activar el control real (`Control real del inversor`) hasta corregir N1 y N2. *Actualizado en v0.2.3: N1 y N2 corregidos; ver la sección siguiente.*
+
+---
+
+## Actualización v0.2.3 — verificación posterior
+
+> Commit `27fbb50` («Corregir N1-N8 de revisión v0.2.2 y publicar v0.2.3»). Comprobaciones repetidas el 2026-11-26: **40 tests OK**, compilación OK, JSON y traducciones OK, versiones sincronizadas.
+
+| Hallazgo | Estado en v0.2.3 | Verificación |
+|---|---|---|
+| N1 — obsolescencia por `last_updated` | **Corregido** | Nuevo `check_state_freshness` (usa `last_reported`/`last_updated`); la corriente de carga se lee con `max_age=None` y solo registra un warning. Matriz de casos correcta: reciente/viejo/None/naive/límite |
+| N2 — captura de producción con `max` | **Corregido, con riesgo nuevo** | Captura única en el freeze, sin `max`: en la simulación el 26/11 queda en 8,5 kWh (antes 11,9). Ver N9 y N10 |
+| N3 — escritura del `Store` cada 5 min | **Corregido** | Solo se persiste cuando hay captura (freeze) |
+| N4 — verificación de escritura | **Parcial** | 5 s × 2 intentos (10 s máximo); sigue verificando la entidad de HA, no el inversor |
+| N5 — timestamp de la escritura al desactivar | **Corregido** | Ahora usa hora local (`ZoneInfo`) |
+| N6 — erratas de documentación | **Corregido** | v0.2.3 en README/SPEC/PLAN, *latch* y obsolescencia documentados, nota del modelo restaurada, sin "2 s" ni "36 pruebas" |
+| N7 — constante única para tres semánticas | **Corregido** | `MAX_PRODUCTION_AGE` separada |
+| N8 — detalles varios | **Parcial** | Test de sincronía `VERSION`/manifest; siguen el error genérico del config flow y el umbral del 75 % |
+
+Comprobación de regresión del *latch* (motor sin cambios): 1 escritura y 60 % a las 08:00 con 1,28–2,56 kW; sigue sin alcanzarse el objetivo (55,6 %) si la potencia real es 1,0 kW, porque no hay realimentación con potencia medida.
+
+### N9 — Medio: `MAX_PRODUCTION_AGE = 6 h` es más corto que el intervalo atardecer→freeze en invierno
+
+La captura se hace en el freeze (23:55) y exige que la producción de hoy sea "fresca" según `last_reported`/`last_updated` con una ventana de 6 h. En Guardamar, el atardecer de finales de noviembre es ~17:50 y el freeze 23:55: **6 h 05 min**, por encima del límite. Si el integrador Deye solo escribe el estado cuando cambia (no re-reporta el mismo valor), la captura se rechaza; y como la ventana de captura se cierra a medianoche (`is_freeze_active and not in_tariff_window`), **ese día se pierde** y el sensor de error queda sin dato.
+
+**Arreglo propuesto:** usar 24 h (o ninguna caducidad) para un contador diario que por diseño deja de cambiar al atardecer, y/o capturar en el primer refresco tras el atardecer en lugar de exigir frescura a las 23:55.
+
+### N10 — Bajo: con el freeze dentro de la ventana tarifaria no se captura nunca
+
+`should_capture_pv = is_freeze_active and not in_tariff_window`. Con una configuración admitida como freeze `00:50` y ventana `01:00–08:00`, durante el segmento de freeze ya se está dentro de la ventana, así que la condición nunca es cierta y la producción no se captura ningún día. **Arreglo propuesto:** desacoplar la captura del freeze; usar una hora fija pre-medianoche (23:55) o el primer refresco tras el atardecer.
 
 ---
 

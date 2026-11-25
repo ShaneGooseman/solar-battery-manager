@@ -1,4 +1,4 @@
-# Especificación técnica — Solar Battery Manager (v0.2.3)
+# Especificación técnica — Solar Battery Manager (v0.2.4)
 
 ## 1. Comportamiento funcional
 
@@ -52,7 +52,7 @@ La integración (compatible con **Home Assistant Core 2026.11+**) realiza el sig
   - Mantiene `night_idle_soc` (`20 %`) fuera de `00:00–08:00` y dentro de la ventana antes de `recommended_start_at`.
   - Escribe `target_soc_pct` en `number.inversordeye_program_1_soc` cuando `should_charge_now = True`, queda enclavado (*latch*) hasta el fin de la ventana y verifica la lectura (polling hasta 5 s × 2 intentos).
   - Al desactivar el switch manualmente, restaura `night_idle_soc` (`20 %`).
-  - Detección de obsolescencia vía `last_reported`: `24 h` (previsión FV), `30 min` (SOC batería), `6 h` (producción hoy); sin caducidad para ajustes estáticos como la corriente máxima de carga.
+  - Detección de obsolescencia vía `last_reported`: `24 h` (previsión FV y producción diaria), `30 min` (SOC batería); sin caducidad para ajustes estáticos como la corriente máxima de carga.
   - Si `Cálculo listo` es `False` o la entidad destino no está disponible, no ordena carga (`fail_safe_hold`).
   - Nunca modifica tensiones, corrientes máximas, límites BMS ni protecciones de red.
 

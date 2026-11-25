@@ -8,11 +8,10 @@ import logging
 import math
 from typing import Any
 
-from zoneinfo import ZoneInfo
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, UnitOfEnergy
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
@@ -21,6 +20,7 @@ from .const import (
     CONF_BATTERY_SOC_ENTITY,
     CONF_CHARGE_EFFICIENCY,
     CONF_CHARGE_TIME_BUFFER_MINUTES,
+    CONF_DEYE_PROGRAM_SOC_ENTITY,
     CONF_ESTIMATION_METHOD,
     CONF_FREEZE_TIME,
     CONF_GRID_CHARGE_CURRENT_ENTITY,
@@ -29,7 +29,9 @@ from .const import (
     CONF_MAX_OPERATIONAL_SOC,
     CONF_MIN_HISTORY_DAYS,
     CONF_MIN_OPERATIONAL_SOC,
+    CONF_NIGHT_IDLE_SOC,
     CONF_PV_FORECAST_ENTITY,
+    CONF_PV_PRODUCTION_TODAY_ENTITY,
     CONF_SAFETY_MARGIN_SOC,
     CONF_SUN_ENTITY,
     CONF_TARIFF_END,
@@ -45,6 +47,7 @@ from .const import (
     DEFAULT_MAX_OPERATIONAL_SOC,
     DEFAULT_MIN_HISTORY_DAYS,
     DEFAULT_MIN_OPERATIONAL_SOC,
+    DEFAULT_NIGHT_IDLE_SOC,
     DEFAULT_SAFETY_MARGIN_SOC,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_SUN_ENTITY,
@@ -55,8 +58,18 @@ from .const import (
     STORAGE_KEY_PREFIX,
     STORAGE_VERSION,
 )
-from .control import ControlActionRecord, ReadOnlySimulationController
-from .engine.calculator import calculate_target_soc, plan_charge_window
+from .control import (
+    ControlActionRecord,
+    DeyeProgramSocController,
+    InverterController,
+    ReadOnlySimulationController,
+)
+from .engine.calculator import (
+    calculate_forecast_error,
+    calculate_target_soc,
+    decide_program_soc_action,
+    plan_charge_window,
+)
 from .engine.models import (
     BatteryConfig,
     CalculationResult,
@@ -101,20 +114,32 @@ def _energy_unit_scale(unit: str | None) -> float | None:
 
 
 @dataclass(frozen=True, slots=True)
+class ForecastComparison:
+    """Comparison between yesterday's frozen forecast for today and actual PV today."""
+
+    forecast_for_today_kwh: float | None
+    actual_production_today_kwh: float | None
+    forecast_error_kwh: float | None
+    forecast_error_pct: float | None
+    frozen_target_soc_for_today: int | None
+
+
+@dataclass(frozen=True, slots=True)
 class CoordinatorData:
-    """Snapshot exposed by the coordinator to read-only entities."""
+    """Snapshot exposed by the coordinator to integration entities."""
 
     live_result: CalculationResult
     effective_result: CalculationResult
     schedule_state: ScheduleState
     charge_plan: ChargeSchedulePlan
+    forecast_comparison: ForecastComparison
     is_frozen: bool
     simulation_mode: bool
     last_action: ControlActionRecord | None
 
 
 class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
-    """Coordinator that computes and freezes the daily target SOC in simulation mode."""
+    """Coordinator that computes, freezes, and optionally applies target SOC."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         super().__init__(
@@ -124,13 +149,20 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
             update_interval=DEFAULT_SCAN_INTERVAL,
         )
         self.entry = entry
-        self.controller = ReadOnlySimulationController()
+        self._sim_controller = ReadOnlySimulationController()
         self._store: Store[dict[str, Any]] = Store(
             hass,
             STORAGE_VERSION,
             f"{STORAGE_KEY_PREFIX}_{entry.entry_id}",
         )
-        self._frozen_data: dict[str, Any] | None = None
+        self._storage_loaded = False
+        self._frozen_by_date: dict[str, dict[str, Any]] = {}
+        self._real_control_enabled = False
+
+    @property
+    def real_control_enabled(self) -> bool:
+        """Return True only when user has explicitly enabled real Deye control."""
+        return self._real_control_enabled
 
     def _cfg(self, key: str, default: Any = None) -> Any:
         if key in self.entry.options:
@@ -138,18 +170,54 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
         return self.entry.data.get(key, default)
 
     async def async_load_storage(self) -> None:
-        """Load persisted frozen target from Home Assistant storage."""
+        """Load persisted frozen targets and opt-in switch state."""
         stored = await self._store.async_load()
-        if isinstance(stored, dict):
-            self._frozen_data = stored
+        self._storage_loaded = True
+        if not isinstance(stored, dict):
+            return
+
+        self._real_control_enabled = bool(stored.get("real_control_enabled", False))
+        frozen_by_date = stored.get("frozen_by_date")
+        if isinstance(frozen_by_date, dict):
+            self._frozen_by_date = dict(frozen_by_date)
+        elif "target_night_date" in stored:
+            # Backward compatibility with v0.1.x single-snapshot format
+            key = str(stored["target_night_date"])
+            self._frozen_by_date[key] = stored
+
+    async def _async_save_storage(self) -> None:
+        """Persist storage payload (keeping the last 7 daily frozen snapshots)."""
+        sorted_keys = sorted(self._frozen_by_date.keys())[-7:]
+        trimmed = {k: self._frozen_by_date[k] for k in sorted_keys}
+        self._frozen_by_date = trimmed
+        await self._store.async_save(
+            {
+                "real_control_enabled": self._real_control_enabled,
+                "frozen_by_date": trimmed,
+            }
+        )
+
+    async def async_set_real_control_enabled(self, enabled: bool) -> None:
+        """Enable or disable opt-in real Deye Program SOC control."""
+        if enabled:
+            target_entity = self._cfg(CONF_DEYE_PROGRAM_SOC_ENTITY)
+            if not target_entity or self.hass.states.get(str(target_entity)) is None:
+                raise HomeAssistantError(
+                    "Configure a valid Deye Program SOC number entity in integration options before enabling real control."
+                )
+
+        self._real_control_enabled = enabled
+        await self._async_save_storage()
+        await self.async_request_refresh()
 
     async def _async_save_frozen(self, result: CalculationResult) -> None:
         """Persist frozen daily target SOC to survive restarts and midnight resets."""
         if not result.is_valid or result.target_soc_pct is None or result.target_night_date is None:
             return
 
-        payload: dict[str, Any] = {
-            "target_night_date": result.target_night_date.isoformat(),
+        date_key = result.target_night_date.isoformat()
+        self._frozen_by_date[date_key] = {
+            "target_night_date": date_key,
             "target_soc_pct": result.target_soc_pct,
             "target_soc_raw": result.target_soc_raw,
             "surplus_kwh": result.surplus_kwh,
@@ -165,8 +233,7 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
             "clamp_bound": result.clamp_bound,
             "calculated_at": result.calculated_at.isoformat() if result.calculated_at else None,
         }
-        self._frozen_data = payload
-        await self._store.async_save(payload)
+        await self._async_save_storage()
 
     def _restore_frozen_result(
         self,
@@ -176,12 +243,11 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
         battery_cfg: BatteryConfig,
     ) -> CalculationResult | None:
         """Return persisted frozen CalculationResult if it matches target_night_date."""
-        if not self._frozen_data:
-            return None
-        if self._frozen_data.get("target_night_date") != target_night_date.isoformat():
+        snapshot = self._frozen_by_date.get(target_night_date.isoformat())
+        if not snapshot:
             return None
 
-        target_soc_pct = self._frozen_data.get("target_soc_pct")
+        target_soc_pct = snapshot.get("target_soc_pct")
         if not isinstance(target_soc_pct, int):
             return None
 
@@ -192,8 +258,8 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 (delta_soc / 100.0) * battery_cfg.usable_battery_kwh
             ) / battery_cfg.effective_grid_efficiency
 
-        est_kwh = self._frozen_data.get("daytime_load_forecast_kwh")
-        method_raw = self._frozen_data.get("estimation_method", DEFAULT_ESTIMATION_METHOD)
+        est_kwh = snapshot.get("daytime_load_forecast_kwh")
+        method_raw = snapshot.get("estimation_method", DEFAULT_ESTIMATION_METHOD)
         load_est = LoadEstimationResult(
             is_valid=True,
             status_code=CalculationStatus.OK,
@@ -203,7 +269,7 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
             samples_used=(),
             samples_discarded=(),
         )
-        calc_at_raw = self._frozen_data.get("calculated_at")
+        calc_at_raw = snapshot.get("calculated_at")
         calc_at = datetime.fromisoformat(calc_at_raw) if calc_at_raw else None
 
         return CalculationResult(
@@ -211,23 +277,31 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
             status_code=CalculationStatus.OK,
             reason="Using frozen pre-midnight target SOC for active overnight window.",
             target_soc_pct=target_soc_pct,
-            target_soc_raw=self._frozen_data.get("target_soc_raw"),
-            surplus_kwh=self._frozen_data.get("surplus_kwh"),
-            solar_soc_gain_pct=self._frozen_data.get("solar_soc_gain_pct"),
+            target_soc_raw=snapshot.get("target_soc_raw"),
+            surplus_kwh=snapshot.get("surplus_kwh"),
+            solar_soc_gain_pct=snapshot.get("solar_soc_gain_pct"),
             grid_energy_required_kwh=grid_energy_required,
-            pv_forecast_kwh=self._frozen_data.get("pv_forecast_kwh"),
+            pv_forecast_kwh=snapshot.get("pv_forecast_kwh"),
             current_soc_pct=current_soc_pct,
             load_estimation=load_est,
-            was_clamped=bool(self._frozen_data.get("was_clamped", False)),
-            clamp_bound=self._frozen_data.get("clamp_bound"),
+            was_clamped=bool(snapshot.get("was_clamped", False)),
+            clamp_bound=snapshot.get("clamp_bound"),
             calculated_at=calc_at,
             target_night_date=target_night_date,
             config_snapshot=battery_cfg,
         )
 
+    def _active_controller(self) -> InverterController:
+        """Return real Deye controller only when opt-in switch is ON and configured."""
+        if self._real_control_enabled:
+            deye_entity = self._cfg(CONF_DEYE_PROGRAM_SOC_ENTITY)
+            if deye_entity:
+                return DeyeProgramSocController(self.hass, str(deye_entity))
+        return self._sim_controller
+
     async def _async_update_data(self) -> CoordinatorData:
         """Fetch sensor states, recorder history, and compute target SOC."""
-        if self._frozen_data is None:
+        if not self._storage_loaded:
             await self.async_load_storage()
 
         now_utc = datetime.now(timezone.utc)
@@ -371,24 +445,60 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
             buffer_minutes=buffer_minutes,
         )
 
-        last_action = self.controller.last_action
-        if (
-            schedule_state.in_tariff_window
-            and effective_result.is_valid
-            and effective_result.target_soc_pct is not None
-        ):
-            last_action = await self.controller.async_apply_target_soc(
-                effective_result.target_soc_pct,
-                reason=effective_result.reason,
-                now=schedule_state.now_local,
-            )
+        night_idle_soc = float(self._cfg(CONF_NIGHT_IDLE_SOC, DEFAULT_NIGHT_IDLE_SOC))
+        controller = self._active_controller()
+        desired_soc, action_name, action_reason = decide_program_soc_action(
+            result=effective_result,
+            schedule_state=schedule_state,
+            charge_plan=charge_plan,
+            night_idle_soc=night_idle_soc,
+            real_control_enabled=not controller.is_simulation,
+        )
+        last_action = await controller.async_apply_program_soc(
+            action=action_name,
+            target_soc_pct=desired_soc,
+            reason=action_reason,
+            now=schedule_state.now_local,
+        )
+
+        # Forecast vs actual comparison for today (using yesterday's frozen snapshot)
+        today_key = schedule_state.now_local.date().isoformat()
+        today_snapshot = self._frozen_by_date.get(today_key, {})
+        forecast_today_raw = today_snapshot.get("pv_forecast_kwh")
+        forecast_today_kwh = (
+            float(forecast_today_raw) if forecast_today_raw is not None else None
+        )
+        frozen_target_today = today_snapshot.get("target_soc_pct")
+
+        actual_today_kwh: float | None = None
+        prod_today_entity = self._cfg(CONF_PV_PRODUCTION_TODAY_ENTITY)
+        if prod_today_entity:
+            prod_raw, prod_unit, prod_err = _parse_float_state(self.hass, str(prod_today_entity))
+            prod_scale = _energy_unit_scale(prod_unit)
+            if prod_err is None and prod_raw is not None and prod_scale is not None:
+                actual_today_kwh = round(prod_raw * prod_scale, 2)
+
+        error_kwh, error_pct = calculate_forecast_error(
+            forecast_kwh=forecast_today_kwh,
+            actual_production_kwh=actual_today_kwh,
+        )
+        forecast_comparison = ForecastComparison(
+            forecast_for_today_kwh=forecast_today_kwh,
+            actual_production_today_kwh=actual_today_kwh,
+            forecast_error_kwh=error_kwh,
+            forecast_error_pct=error_pct,
+            frozen_target_soc_for_today=(
+                int(frozen_target_today) if isinstance(frozen_target_today, int) else None
+            ),
+        )
 
         return CoordinatorData(
             live_result=live_result,
             effective_result=effective_result,
             schedule_state=schedule_state,
             charge_plan=charge_plan,
+            forecast_comparison=forecast_comparison,
             is_frozen=is_frozen,
-            simulation_mode=self.controller.is_simulation,
+            simulation_mode=controller.is_simulation,
             last_action=last_action,
         )

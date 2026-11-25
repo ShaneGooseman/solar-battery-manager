@@ -26,6 +26,7 @@ from .const import (
     CONF_BATTERY_SOC_ENTITY,
     CONF_CHARGE_EFFICIENCY,
     CONF_CHARGE_TIME_BUFFER_MINUTES,
+    CONF_DEYE_PROGRAM_SOC_ENTITY,
     CONF_ESTIMATION_METHOD,
     CONF_FREEZE_TIME,
     CONF_GRID_CHARGE_CURRENT_ENTITY,
@@ -34,7 +35,9 @@ from .const import (
     CONF_MAX_OPERATIONAL_SOC,
     CONF_MIN_HISTORY_DAYS,
     CONF_MIN_OPERATIONAL_SOC,
+    CONF_NIGHT_IDLE_SOC,
     CONF_PV_FORECAST_ENTITY,
+    CONF_PV_PRODUCTION_TODAY_ENTITY,
     CONF_SAFETY_MARGIN_SOC,
     CONF_SUN_ENTITY,
     CONF_TARIFF_END,
@@ -49,6 +52,7 @@ from .const import (
     DEFAULT_MAX_OPERATIONAL_SOC,
     DEFAULT_MIN_HISTORY_DAYS,
     DEFAULT_MIN_OPERATIONAL_SOC,
+    DEFAULT_NIGHT_IDLE_SOC,
     DEFAULT_SAFETY_MARGIN_SOC,
     DEFAULT_SUN_ENTITY,
     DEFAULT_TARIFF_END,
@@ -120,6 +124,10 @@ def _entities_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 CONF_PV_FORECAST_ENTITY,
                 default=defaults.get(CONF_PV_FORECAST_ENTITY),
             ): EntitySelector(EntitySelectorConfig(domain="sensor")),
+            vol.Optional(
+                CONF_PV_PRODUCTION_TODAY_ENTITY,
+                default=defaults.get(CONF_PV_PRODUCTION_TODAY_ENTITY),
+            ): EntitySelector(EntitySelectorConfig(domain="sensor")),
             vol.Required(
                 CONF_LOAD_ENERGY_ENTITY,
                 default=defaults.get(CONF_LOAD_ENERGY_ENTITY),
@@ -132,6 +140,10 @@ def _entities_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 CONF_GRID_CHARGE_CURRENT_ENTITY,
                 default=defaults.get(CONF_GRID_CHARGE_CURRENT_ENTITY),
             ): EntitySelector(EntitySelectorConfig(domain=["number", "sensor"])),
+            vol.Optional(
+                CONF_DEYE_PROGRAM_SOC_ENTITY,
+                default=defaults.get(CONF_DEYE_PROGRAM_SOC_ENTITY),
+            ): EntitySelector(EntitySelectorConfig(domain="number")),
             vol.Required(
                 CONF_SUN_ENTITY,
                 default=defaults.get(CONF_SUN_ENTITY, DEFAULT_SUN_ENTITY),
@@ -174,6 +186,12 @@ def _parameters_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 default=defaults.get(CONF_MAX_OPERATIONAL_SOC, DEFAULT_MAX_OPERATIONAL_SOC),
             ): NumberSelector(
                 NumberSelectorConfig(min=50.0, max=100.0, step=1.0, mode=NumberSelectorMode.BOX)
+            ),
+            vol.Required(
+                CONF_NIGHT_IDLE_SOC,
+                default=defaults.get(CONF_NIGHT_IDLE_SOC, DEFAULT_NIGHT_IDLE_SOC),
+            ): NumberSelector(
+                NumberSelectorConfig(min=0.0, max=50.0, step=1.0, mode=NumberSelectorMode.BOX)
             ),
             vol.Required(
                 CONF_BATTERY_NOMINAL_VOLTAGE,

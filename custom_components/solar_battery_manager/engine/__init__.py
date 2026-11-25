@@ -1,6 +1,11 @@
 """Pure calculation engine for Solar Battery Manager."""
 
-from .calculator import calculate_target_soc, plan_charge_window
+from .calculator import (
+    calculate_forecast_error,
+    calculate_target_soc,
+    decide_program_soc_action,
+    plan_charge_window,
+)
 from .estimator import estimate_daytime_load
 from .models import (
     BatteryConfig,
@@ -27,7 +32,9 @@ __all__ = [
     "LoadEstimationResult",
     "ScheduleState",
     "TariffScheduleConfig",
+    "calculate_forecast_error",
     "calculate_target_soc",
+    "decide_program_soc_action",
     "estimate_daytime_load",
     "evaluate_schedule",
     "plan_charge_window",

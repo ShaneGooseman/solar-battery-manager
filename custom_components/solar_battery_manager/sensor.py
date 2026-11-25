@@ -92,6 +92,29 @@ def _charge_plan_attrs(data: CoordinatorData) -> dict[str, Any]:
     }
 
 
+def _forecast_error_attrs(data: CoordinatorData) -> dict[str, Any]:
+    comp = data.forecast_comparison
+    return {
+        "forecast_for_today_kwh": comp.forecast_for_today_kwh,
+        "actual_production_today_kwh": comp.actual_production_today_kwh,
+        "forecast_error_pct": comp.forecast_error_pct,
+        "frozen_target_soc_for_today": comp.frozen_target_soc_for_today,
+    }
+
+
+def _model_status_attrs(data: CoordinatorData) -> dict[str, Any]:
+    action = data.last_action
+    return {
+        "reason": data.effective_result.reason,
+        "simulation_mode": data.simulation_mode,
+        "is_frozen": data.is_frozen,
+        "last_control_action": action.action if action else None,
+        "last_control_soc_pct": action.target_soc_pct if action else None,
+        "last_control_verified": action.verified if action else None,
+        "last_control_reason": action.reason if action else None,
+    }
+
+
 SENSOR_DESCRIPTIONS: tuple[SolarBatterySensorDescription, ...] = (
     SolarBatterySensorDescription(
         key="pv_forecast_tomorrow",
@@ -165,17 +188,24 @@ SENSOR_DESCRIPTIONS: tuple[SolarBatterySensorDescription, ...] = (
         attrs_fn=_charge_plan_attrs,
     ),
     SolarBatterySensorDescription(
+        key="forecast_error",
+        translation_key="forecast_error",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: d.forecast_comparison.forecast_error_kwh,
+        attrs_fn=_forecast_error_attrs,
+    ),
+    SolarBatterySensorDescription(
         key="model_status",
         translation_key="model_status",
         device_class=SensorDeviceClass.ENUM,
         options=[status.value for status in CalculationStatus],
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda d: d.effective_result.status_code.value,
-        attrs_fn=lambda d: {
-            "reason": d.effective_result.reason,
-            "simulation_mode": d.simulation_mode,
-            "is_frozen": d.is_frozen,
-        },
+        attrs_fn=_model_status_attrs,
     ),
 )
 
@@ -213,7 +243,7 @@ class SolarBatterySensor(CoordinatorEntity[SolarBatteryCoordinator], SensorEntit
             name="Solar Battery Manager",
             manufacturer="Solar Battery Manager",
             model="Simulation Mode (Read-Only)",
-            sw_version="0.1.5",
+            sw_version="0.2.0",
             entry_type=DeviceEntryType.SERVICE,
         )
 

@@ -6,9 +6,11 @@
         "description": "Selecciona los sensores en modo simulación de solo lectura. No se modificará ningún parámetro del inversor.",
         "data": {
           "pv_forecast_entity": "Sensor de previsión FV para mañana",
+          "pv_production_today_entity": "Sensor de producción FV real de hoy (opcional)",
           "load_energy_entity": "Sensor de energía de consumo de la vivienda (histórico diurno)",
           "battery_soc_entity": "Sensor de SOC de batería",
           "grid_charge_current_entity": "Corriente máxima de carga desde red (opcional)",
+          "deye_program_soc_entity": "Entidad SOC del Programa 1 del Deye (opcional, para control real)",
           "sun_entity": "Entidad Sun (amanecer y atardecer automáticos)"
         },
         "data_description": {
@@ -25,6 +27,7 @@
           "safety_margin_soc": "Margen de seguridad (% SOC)",
           "min_operational_soc": "SOC mínimo operativo (%)",
           "max_operational_soc": "SOC máximo operativo (%)",
+          "night_idle_soc": "SOC mínimo de reposo nocturno (%)",
           "battery_nominal_voltage": "Tensión nominal de batería (V)",
           "charge_time_buffer_minutes": "Margen de tiempo de carga (minutos)",
           "estimation_method": "Método de estimación de consumo diurno",
@@ -53,15 +56,18 @@
         "description": "Ajusta los parámetros de cálculo. La integración funciona en modo simulación de solo lectura.",
         "data": {
           "pv_forecast_entity": "Sensor de previsión FV para mañana",
+          "pv_production_today_entity": "Sensor de producción FV real de hoy (opcional)",
           "load_energy_entity": "Sensor de energía de consumo de la vivienda (histórico diurno)",
           "battery_soc_entity": "Sensor de SOC de batería",
           "grid_charge_current_entity": "Corriente máxima de carga desde red (opcional)",
+          "deye_program_soc_entity": "Entidad SOC del Programa 1 del Deye (opcional, para control real)",
           "sun_entity": "Entidad Sun (amanecer y atardecer automáticos)",
           "usable_battery_kwh": "Capacidad útil de batería (kWh)",
           "charge_efficiency": "Eficiencia de carga (%)",
           "safety_margin_soc": "Margen de seguridad (% SOC)",
           "min_operational_soc": "SOC mínimo operativo (%)",
           "max_operational_soc": "SOC máximo operativo (%)",
+          "night_idle_soc": "SOC mínimo de reposo nocturno (%)",
           "battery_nominal_voltage": "Tensión nominal de batería (V)",
           "charge_time_buffer_minutes": "Margen de tiempo de carga (minutos)",
           "estimation_method": "Método de estimación de consumo diurno",
@@ -111,6 +117,9 @@
       "recommended_charge_start": {
         "name": "Hora de inicio de carga recomendada"
       },
+      "forecast_error": {
+        "name": "Error de previsión FV"
+      },
       "model_status": {
         "name": "Estado del modelo",
         "state": {
@@ -126,6 +135,11 @@
     "binary_sensor": {
       "calculation_ready": {
         "name": "Cálculo listo"
+      }
+    },
+    "switch": {
+      "real_control": {
+        "name": "Control real del inversor"
       }
     }
   }

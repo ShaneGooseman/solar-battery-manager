@@ -323,3 +323,76 @@ def plan_charge_window(
         can_reach_target_in_window=can_reach,
         should_charge_now=should_charge_now,
     )
+
+
+def decide_program_soc_action(
+    *,
+    result: CalculationResult,
+    schedule_state: ScheduleState,
+    charge_plan: ChargeSchedulePlan,
+    night_idle_soc: float,
+    real_control_enabled: bool,
+) -> tuple[int | None, str, str]:
+    """Decide the desired Program 1 SOC and action label (pure, fail-safe).
+
+    Returns ``(desired_soc_pct, action_name, reason)``.
+    ``desired_soc_pct`` is ``None`` when no write/simulation target should be applied.
+    """
+    idle_soc = int(round(max(0.0, min(100.0, night_idle_soc))))
+
+    if not schedule_state.in_tariff_window:
+        return (
+            idle_soc,
+            "restore_idle_soc" if real_control_enabled else "simulate_idle_soc",
+            "Outside economic tariff window; keep/restore night idle SOC.",
+        )
+
+    if not result.is_valid or result.target_soc_pct is None:
+        return (
+            None,
+            "fail_safe_hold",
+            f"Calculation invalid ({result.status_code.value}); refusing to order grid charge.",
+        )
+
+    if not charge_plan.is_valid:
+        return (
+            None,
+            "fail_safe_hold",
+            f"Charge plan invalid ({charge_plan.reason}); refusing to order grid charge.",
+        )
+
+    if charge_plan.should_charge_now:
+        return (
+            result.target_soc_pct,
+            "apply_target_soc" if real_control_enabled else "simulate_target_soc",
+            "Charge start time reached inside tariff window.",
+        )
+
+    return (
+        idle_soc,
+        "wait_idle_soc" if real_control_enabled else "simulate_wait_idle_soc",
+        "Inside tariff window before recommended start time; allow night discharge to idle SOC.",
+    )
+
+
+def calculate_forecast_error(
+    *,
+    forecast_kwh: float | None,
+    actual_production_kwh: float | None,
+) -> tuple[float | None, float | None]:
+    """Calculate forecast error (actual - forecast) in kWh and percentage."""
+    if (
+        forecast_kwh is None
+        or actual_production_kwh is None
+        or isinstance(forecast_kwh, bool)
+        or isinstance(actual_production_kwh, bool)
+        or not math.isfinite(forecast_kwh)
+        or not math.isfinite(actual_production_kwh)
+        or forecast_kwh < 0
+        or actual_production_kwh < 0
+    ):
+        return None, None
+
+    error_kwh = float(actual_production_kwh) - float(forecast_kwh)
+    error_pct = (error_kwh / float(forecast_kwh) * 100.0) if forecast_kwh > 0 else None
+    return round(error_kwh, 2), (round(error_pct, 1) if error_pct is not None else None)

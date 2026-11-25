@@ -84,7 +84,12 @@ class TestReadOnlySimulationController(unittest.TestCase):
         self.assertTrue(controller.is_simulation)
         now = datetime(2026, 11, 25, 1, 0, tzinfo=timezone.utc)
         record = _run_pure_coro(
-            controller.async_apply_target_soc(65, "Simulated overnight target", now)
+            controller.async_apply_program_soc(
+                action="simulate_target_soc",
+                target_soc_pct=65,
+                reason="Simulated overnight target",
+                now=now,
+            )
         )
         self.assertTrue(record.simulated)
         self.assertEqual(record.target_soc_pct, 65)

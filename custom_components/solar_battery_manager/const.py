@@ -11,10 +11,12 @@ DEFAULT_SCAN_INTERVAL = timedelta(minutes=5)
 
 # Entity configuration keys
 CONF_PV_FORECAST_ENTITY = "pv_forecast_entity"
+CONF_PV_PRODUCTION_TODAY_ENTITY = "pv_production_today_entity"
 CONF_LOAD_ENERGY_ENTITY = "load_energy_entity"
 CONF_BATTERY_SOC_ENTITY = "battery_soc_entity"
 CONF_GRID_CHARGE_CURRENT_ENTITY = "grid_charge_current_entity"
 CONF_SUN_ENTITY = "sun_entity"
+CONF_DEYE_PROGRAM_SOC_ENTITY = "deye_program_soc_entity"
 
 # Battery and calculation configuration keys
 CONF_USABLE_BATTERY_KWH = "usable_battery_kwh"
@@ -22,6 +24,7 @@ CONF_CHARGE_EFFICIENCY = "charge_efficiency"
 CONF_SAFETY_MARGIN_SOC = "safety_margin_soc"
 CONF_MIN_OPERATIONAL_SOC = "min_operational_soc"
 CONF_MAX_OPERATIONAL_SOC = "max_operational_soc"
+CONF_NIGHT_IDLE_SOC = "night_idle_soc"
 CONF_BATTERY_NOMINAL_VOLTAGE = "battery_nominal_voltage"
 CONF_CHARGE_TIME_BUFFER_MINUTES = "charge_time_buffer_minutes"
 
@@ -40,6 +43,7 @@ DEFAULT_CHARGE_EFFICIENCY_PCT = 90.0
 DEFAULT_SAFETY_MARGIN_SOC = 5.0
 DEFAULT_MIN_OPERATIONAL_SOC = 15.0
 DEFAULT_MAX_OPERATIONAL_SOC = 100.0
+DEFAULT_NIGHT_IDLE_SOC = 20.0
 DEFAULT_BATTERY_NOMINAL_VOLTAGE = 51.2
 DEFAULT_CHARGE_TIME_BUFFER_MINUTES = 15
 DEFAULT_GRID_CHARGE_CURRENT_A = 25.0

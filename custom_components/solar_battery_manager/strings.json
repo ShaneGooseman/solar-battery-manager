@@ -41,6 +41,7 @@
     },
     "error": {
       "invalid_entity": "Selected entity was not found or is invalid.",
+      "invalid_entity_unit": "One of the selected entities has an incompatible unit (expected kWh/Wh for energy, % for SOC, A for current).",
       "invalid_sun_entity": "Selected Sun entity does not exist or lacks sunrise/sunset attributes (next_rising, next_setting).",
       "invalid_parameters": "One or more battery or schedule parameters are out of range.",
       "invalid_schedule": "Tariff schedule times are invalid."
@@ -84,6 +85,8 @@
       }
     },
     "error": {
+      "invalid_entity": "Selected entity was not found or is invalid.",
+      "invalid_entity_unit": "One of the selected entities has an incompatible unit (expected kWh/Wh for energy, % for SOC, A for current).",
       "invalid_sun_entity": "Selected Sun entity does not exist or lacks sunrise/sunset attributes (next_rising, next_setting).",
       "invalid_parameters": "One or more battery or schedule parameters are out of range.",
       "invalid_schedule": "Tariff schedule times are invalid."

@@ -166,7 +166,14 @@ def calculate_target_soc(
     min_int = math.ceil(config.min_operational_soc)
     max_int = math.floor(config.max_operational_soc)
     if min_int <= max_int:
-        target_soc_pct = max(min_int, min(max_int, target_soc_pct))
+        if target_soc_pct < min_int:
+            target_soc_pct = min_int
+            was_clamped = True
+            clamp_bound = "min"
+        elif target_soc_pct > max_int:
+            target_soc_pct = max_int
+            was_clamped = True
+            clamp_bound = "max"
 
     grid_energy_required_kwh: float | None = None
     if current_soc_pct is not None:

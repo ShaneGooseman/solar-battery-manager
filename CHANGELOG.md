@@ -2,6 +2,14 @@
 
 Todos los cambios relevantes de **Solar Battery Manager** se documentan en este archivo.
 
+## [0.2.5] — 2026-11-26
+- **Seguridad al desactivar el switch**: desactiva y persiste `real_control_enabled = False` antes de restaurar `night_idle_soc` en `try/except`, evitando que un fallo del inversor bloquee el apagado del control real.
+- **Aislamiento de fallos**: encapsula consultas al `recorder` y llamadas de escritura al inversor en `try/except` para no tumbar el coordinador ni el switch.
+- **Captura de producción diaria**: elimina el fallback basado en `freeze` para evitar capturar `0.0` si el freeze es posterior a medianoche.
+- **Validación de entidades en UI**: comprueba unidades esperadas (`kWh`/`Wh`, `%`, `A`) en `ConfigFlow` y `OptionsFlow`.
+- **Auditoría y frescura**: registra escrituras reales en el **Logbook** de Home Assistant y `action_history` en diagnósticos; amplía ventanas de frescura a `36 h` (previsión FV) y `60 min` (SOC), propaga motivos `stale_state`, y actualiza `was_clamped` tras el redondeo entero.
+- **Documentación**: añade requisitos del inversor Deye/Solarman y guía de solución de problemas en `README.md` y `README.en.md`.
+
 ## [0.2.4] — 2026-11-26
 - Captura la producción fotovoltaica diaria una sola vez tras el atardecer (`solar_end`), evitando pérdidas en invierno cuando pasan más de 6 h hasta las `23:55` o si el freeze cae dentro de la ventana tarifaria.
 - Amplía `MAX_PRODUCTION_AGE` a `24 h`.

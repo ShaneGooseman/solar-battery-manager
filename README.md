@@ -4,7 +4,7 @@
 
 Integración personalizada para **Home Assistant Core (2026.11+)** que estima cuánta energía solar sobrará mañana y calcula el **SOC mínimo necesario al final de la tarifa económica nocturna** (por defecto `08:00`) para que la producción fotovoltaica del día lleve la batería al 100 %.
 
-> **Seguridad por defecto (`v0.2.4`)**: la integración funciona en **modo simulación** mientras el interruptor **`Control real del inversor`** esté apagado (`OFF` por defecto). Si decides activarlo, únicamente ajusta el SOC objetivo del tramo horario nocturno (`number.inversordeye_program_1_soc`) sin modificar nunca tensiones, corrientes máximas ni protecciones del BMS.
+> **Seguridad por defecto (`v0.2.5`)**: la integración funciona en **modo simulación** mientras el interruptor **`Control real del inversor`** esté apagado (`OFF` por defecto). Si decides activarlo, únicamente ajusta el SOC objetivo del tramo horario nocturno (`number.inversordeye_program_1_soc`) sin modificar nunca tensiones, corrientes máximas ni protecciones del BMS.
 
 ---
 
@@ -97,10 +97,31 @@ Con previsión FV de `11,91 kWh`, consumo diurno de `5,10 kWh`, `12,0 kWh` útil
 
 ## Seguridad y fallo seguro
 
-- **Validación de frescura (`last_reported`)**: si la previsión FV lleva > `24 h` sin reportarse o el SOC > `30 min`, el cálculo pasa a inválido y **no ordena carga** (`fail_safe_hold`). La corriente máxima de carga (ajuste estático) no caduca por falta de cambios.
-- **Unidades explícitas**: solo acepta sensores en `kWh` o `Wh`; si falta la unidad, falla de forma segura.
-- **Verificación de escritura**: en modo control real, espera hasta `5 s × 2 intentos` comprobando que el Deye reflejó el nuevo valor.
-- **Al apagar el interruptor**: restaura el SOC de reposo nocturno (`20 %`) como última acción segura antes de volver a simulación.
+- **Validación de frescura (`last_reported`)**: si la previsión FV lleva > `36 h` sin reportarse o el SOC > `60 min`, el cálculo pasa a inválido y **no ordena carga** (`fail_safe_hold`). La corriente máxima de carga (ajuste estático) no caduca por falta de cambios.
+- **Unidades explícitas**: tanto el configurador como el coordinador validan `kWh`/`Wh` para energía, `%` para SOC y `A` para corriente; si falta la unidad, falla de forma segura.
+- **Aislamiento de fallos**: un error temporal del `recorder` o del servicio de escritura no bloquea el resto de entidades ni impide apagar el interruptor `Control real del inversor`.
+- **Verificación de escritura y auditoría**: en modo control real, espera hasta `5 s × 2 intentos` comprobando que la entidad en HA reflejó el nuevo valor y registra la acción en el **Logbook** de Home Assistant y en diagnósticos (`action_history`).
+- **Al apagar el interruptor**: desactiva el control real de inmediato y restaura el SOC de reposo nocturno (`20 %`) como acción *best-effort* antes de volver a simulación.
+
+---
+
+## Requisitos del inversor (Deye / Solarman)
+
+Para que el control real sobre `number.inversordeye_program_1_soc` funcione según lo esperado:
+
+1. **Time of Use activo**: `select.inversordeye_time_of_use` debe estar en `Week` o `Enabled` (no `Disabled`).
+2. **Franja coincidente**: `Program 1` debe cubrir la ventana económica nocturna (`00:00` → `Program 2 = 08:00`) con `Program 1 Charging = Grid`.
+3. **Modo por capacidad**: `select.inversordeye_battery_operation_mode` en `Capacity` (SOC %).
+4. **Corriente y tensión**: `number.inversordeye_battery_grid_charging_current` representa corriente DC de batería en Amperios; para baterías LiFePO4 de 16 celdas ("48 V"), la tensión nominal típica es `51,2 V`.
+
+---
+
+## Solución de problemas
+
+- **`insufficient_history`**: el sensor de consumo aún no tiene suficientes días válidos con ≥ 75 % de horas en la ventana solar (`sun.sun`), o el Recorder tuvo un fallo temporal. Revisa el atributo `samples_discarded` de `Consumo diurno previsto mañana`.
+- **`invalid_sun_window`**: la entidad `sun.sun` no está disponible o carece de `next_rising`/`next_setting`.
+- **`invalid_pv_forecast` / `stale_state`**: el sensor de previsión FV está `unknown`/`unavailable` o supera las `36 h` sin reportar datos.
+- **`fail_safe_hold`**: dentro de la ventana nocturna, la integración detectó un dato inválido u obsoleto y se niega a ordenar carga por seguridad.
 
 ---
 

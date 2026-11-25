@@ -41,6 +41,7 @@
     },
     "error": {
       "invalid_entity": "La entidad seleccionada no existe o no es válida.",
+      "invalid_entity_unit": "Una de las entidades seleccionadas tiene una unidad incompatible (se espera kWh/Wh para energía, % para SOC, A para corriente).",
       "invalid_sun_entity": "La entidad Sun seleccionada no existe o no tiene los atributos de amanecer/atardecer (next_rising, next_setting).",
       "invalid_parameters": "Uno o más parámetros de batería están fuera de rango.",
       "invalid_schedule": "Los horarios de tarifa no son válidos."
@@ -84,6 +85,8 @@
       }
     },
     "error": {
+      "invalid_entity": "La entidad seleccionada no existe o no es válida.",
+      "invalid_entity_unit": "Una de las entidades seleccionadas tiene una unidad incompatible (se espera kWh/Wh para energía, % para SOC, A para corriente).",
       "invalid_sun_entity": "La entidad Sun seleccionada no existe o no tiene los atributos de amanecer/atardecer (next_rising, next_setting).",
       "invalid_parameters": "Uno o más parámetros de batería están fuera de rango.",
       "invalid_schedule": "Los horarios de tarifa no son válidos."

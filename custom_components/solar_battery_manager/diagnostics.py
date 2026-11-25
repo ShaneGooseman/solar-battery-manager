@@ -78,4 +78,5 @@ async def async_get_config_entry_diagnostics(
             asdict(data.forecast_comparison) if data else None
         ),
         "last_action": asdict(data.last_action) if data and data.last_action else None,
+        "action_history": coordinator.action_history,
     }

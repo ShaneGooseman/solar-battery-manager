@@ -71,6 +71,68 @@ def _parse_time_str(value: str | time) -> time:
     return time.fromisoformat(str(value))
 
 
+def _validate_selected_entities(
+    hass: Any,
+    user_input: dict[str, Any],
+) -> dict[str, str]:
+    """Validate existence and expected measurement units of selected entities."""
+    for key in (
+        CONF_PV_FORECAST_ENTITY,
+        CONF_LOAD_ENERGY_ENTITY,
+        CONF_BATTERY_SOC_ENTITY,
+    ):
+        entity_id = user_input.get(key)
+        if not entity_id or hass.states.get(entity_id) is None:
+            return {"base": "invalid_entity"}
+
+    for energy_key in (
+        CONF_PV_FORECAST_ENTITY,
+        CONF_LOAD_ENERGY_ENTITY,
+        CONF_PV_PRODUCTION_TODAY_ENTITY,
+    ):
+        entity_id = user_input.get(energy_key)
+        if entity_id:
+            st = hass.states.get(entity_id)
+            if st is None:
+                return {"base": "invalid_entity"}
+            unit = st.attributes.get("unit_of_measurement")
+            if unit not in ("kWh", "Wh"):
+                return {"base": "invalid_entity_unit"}
+
+    for soc_key in (CONF_BATTERY_SOC_ENTITY, CONF_DEYE_PROGRAM_SOC_ENTITY):
+        entity_id = user_input.get(soc_key)
+        if entity_id:
+            st = hass.states.get(entity_id)
+            if st is None:
+                return {"base": "invalid_entity"}
+            unit = st.attributes.get("unit_of_measurement")
+            if unit != "%":
+                return {"base": "invalid_entity_unit"}
+
+    current_entity = user_input.get(CONF_GRID_CHARGE_CURRENT_ENTITY)
+    if current_entity:
+        st = hass.states.get(current_entity)
+        if st is None:
+            return {"base": "invalid_entity"}
+        if st.attributes.get("unit_of_measurement") != "A":
+            return {"base": "invalid_entity_unit"}
+
+    sun_entity = user_input.get(CONF_SUN_ENTITY)
+    sun_state = hass.states.get(sun_entity) if sun_entity else None
+    if sun_state is None:
+        return {"base": "invalid_sun_entity"}
+
+    _, _, sun_err = resolve_solar_window_from_sun(
+        sun_state.attributes.get("next_rising"),
+        sun_state.attributes.get("next_setting"),
+        hass.config.time_zone,
+    )
+    if sun_err is not None:
+        return {"base": "invalid_sun_entity"}
+
+    return {}
+
+
 def _validate_parameters(
     data: dict[str, Any],
     timezone_name: str,
@@ -271,30 +333,7 @@ class SolarBatteryManagerConfigFlow(ConfigFlow, domain=DOMAIN):
 
         errors: dict[str, str] = {}
         if user_input is not None:
-            for key in (
-                CONF_PV_FORECAST_ENTITY,
-                CONF_LOAD_ENERGY_ENTITY,
-                CONF_BATTERY_SOC_ENTITY,
-            ):
-                entity_id = user_input.get(key)
-                if not entity_id or self.hass.states.get(entity_id) is None:
-                    errors["base"] = "invalid_entity"
-                    break
-
-            if not errors:
-                sun_entity = user_input.get(CONF_SUN_ENTITY)
-                sun_state = self.hass.states.get(sun_entity) if sun_entity else None
-                if sun_state is None:
-                    errors["base"] = "invalid_sun_entity"
-                else:
-                    _, _, sun_err = resolve_solar_window_from_sun(
-                        sun_state.attributes.get("next_rising"),
-                        sun_state.attributes.get("next_setting"),
-                        self.hass.config.time_zone,
-                    )
-                    if sun_err is not None:
-                        errors["base"] = "invalid_sun_entity"
-
+            errors = _validate_selected_entities(self.hass, user_input)
             if not errors:
                 self._entity_data = user_input
                 return await self.async_step_parameters()
@@ -345,19 +384,7 @@ class SolarBatteryManagerOptionsFlow(OptionsFlow):
         merged = {**self.config_entry.data, **self.config_entry.options}
 
         if user_input is not None:
-            sun_entity = user_input.get(CONF_SUN_ENTITY)
-            sun_state = self.hass.states.get(sun_entity) if sun_entity else None
-            if sun_state is None:
-                errors["base"] = "invalid_sun_entity"
-            else:
-                _, _, sun_err = resolve_solar_window_from_sun(
-                    sun_state.attributes.get("next_rising"),
-                    sun_state.attributes.get("next_setting"),
-                    self.hass.config.time_zone,
-                )
-                if sun_err is not None:
-                    errors["base"] = "invalid_sun_entity"
-
+            errors = _validate_selected_entities(self.hass, user_input)
             if not errors:
                 errors = _validate_parameters(user_input, self.hass.config.time_zone)
             if not errors:

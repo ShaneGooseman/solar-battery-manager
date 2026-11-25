@@ -49,7 +49,7 @@ class SolarBatteryReadyBinarySensor(
             identifiers={(DOMAIN, entry.entry_id)},
             name="Solar Battery Manager",
             manufacturer="Solar Battery Manager",
-            model="Simulation Mode (Read-Only)",
+            model="Adaptive Night Charge Controller",
             sw_version=VERSION,
             entry_type=DeviceEntryType.SERVICE,
         )

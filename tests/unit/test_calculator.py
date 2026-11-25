@@ -156,6 +156,26 @@ class TestCalculator(unittest.TestCase):
         self.assertEqual(result.status_code, CalculationStatus.INSUFFICIENT_HISTORY)
         self.assertIsNone(result.target_soc_pct)
 
+    def test_rounding_past_fractional_bound_marks_was_clamped(self) -> None:
+        config = BatteryConfig(
+            usable_battery_kwh=12.0,
+            charge_efficiency=1.0,
+            safety_margin_soc=0.0,
+            min_operational_soc=19.6,
+            max_operational_soc=100.0,
+        )
+        # surplus=9.64 kWh -> gain=80.333% -> raw=19.667% (>= 19.6), rounds to 20 -> >= ceil(19.6)=20
+        # Now test max bound: max=89.4, raw=89.3 -> floor(89.4)=89 -> rounds to 89.
+        # Test raw=89.4 -> rounds to 89 <= 89; raw=19.6 -> ceil(19.6)=20 -> clamped up from 19.6!
+        result = calculate_target_soc(
+            pv_forecast_kwh=13.648,
+            load_samples=_valid_history(4.0),
+            config=config,
+        )
+        # surplus=9.648 -> gain=80.4 -> raw=19.6 (not < 19.6), round(19.6)=20 == ceil(19.6)
+        self.assertTrue(result.is_valid)
+        self.assertEqual(result.target_soc_pct, 20)
+
 
 if __name__ == "__main__":
     unittest.main()

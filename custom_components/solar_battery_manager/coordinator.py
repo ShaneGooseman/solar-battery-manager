@@ -187,6 +187,7 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
         self._actual_pv_by_date: dict[str, float] = {}
         self._real_control_enabled = False
         self._latched_night_date: str | None = None
+        self._action_history: list[dict[str, Any]] = []
 
         # Daily Recorder cache to avoid querying SQL every 5 minutes
         self._history_cache_key: tuple[Any, ...] | None = None
@@ -201,6 +202,11 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
     def frozen_snapshots(self) -> dict[str, dict[str, Any]]:
         """Return copy of persisted frozen snapshots for diagnostics."""
         return dict(self._frozen_by_date)
+
+    @property
+    def action_history(self) -> list[dict[str, Any]]:
+        """Return recent control actions for audit and diagnostics."""
+        return list(self._action_history)
 
     def _cfg(self, key: str, default: Any = None) -> Any:
         if key in self.entry.options:
@@ -265,20 +271,35 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 raise HomeAssistantError(
                     "Configure a valid Deye Program SOC number entity in integration options before enabling real control."
                 )
-        elif self._real_control_enabled and target_entity:
-            # Restore night idle SOC on explicit switch-off before returning to simulation
+            self._real_control_enabled = True
+            await self._async_save_storage()
+            await self.async_request_refresh()
+            return
+
+        was_enabled = self._real_control_enabled
+        # Always disable and persist first so an inverter error never locks the switch ON.
+        self._real_control_enabled = False
+        await self._async_save_storage()
+
+        if was_enabled and target_entity:
             idle_soc = int(round(float(self._cfg(CONF_NIGHT_IDLE_SOC, DEFAULT_NIGHT_IDLE_SOC))))
             controller = self._get_deye_controller(str(target_entity))
             local_now = datetime.now(ZoneInfo(self.hass.config.time_zone))
-            await controller.async_apply_program_soc(
-                action="restore_idle_on_disable",
-                target_soc_pct=idle_soc,
-                reason="Real inverter control disabled by user; restoring night idle SOC.",
-                now=local_now,
-            )
+            try:
+                record = await controller.async_apply_program_soc(
+                    action="restore_idle_on_disable",
+                    target_soc_pct=idle_soc,
+                    reason="Real inverter control disabled by user; restoring night idle SOC.",
+                    now=local_now,
+                )
+                self._record_audit_action(record)
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.exception(
+                    "Failed to restore night idle SOC on disable for %s: %s",
+                    target_entity,
+                    err,
+                )
 
-        self._real_control_enabled = enabled
-        await self._async_save_storage()
         await self.async_request_refresh()
 
     async def _async_save_frozen(self, result: CalculationResult) -> None:
@@ -383,14 +404,41 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 return self._get_deye_controller(str(deye_entity))
         return self._sim_controller
 
-    def _capture_pv_at_freeze_and_compare_yesterday(
+    def _record_audit_action(self, record: ControlActionRecord) -> None:
+        """Keep bounded in-memory audit log and emit Home Assistant logbook entry for real writes."""
+        entry_dict = {
+            "timestamp": record.timestamp.isoformat(),
+            "action": record.action,
+            "target_soc_pct": record.target_soc_pct,
+            "simulated": record.simulated,
+            "verified": record.verified,
+            "reason": record.reason,
+        }
+        self._action_history.append(entry_dict)
+        if len(self._action_history) > 20:
+            self._action_history = self._action_history[-20:]
+
+        if not record.simulated and record.action != "fail_safe_hold":
+            try:
+                from homeassistant.components.logbook import async_log_entry
+
+                async_log_entry(
+                    self.hass,
+                    name="Solar Battery Manager",
+                    message=f"{record.action} (SOC={record.target_soc_pct}%, verified={record.verified}): {record.reason}",
+                    domain=DOMAIN,
+                )
+            except Exception:  # noqa: BLE001
+                pass
+
+    def _capture_daily_pv_and_compare_yesterday(
         self,
         *,
         local_date: date,
         now_utc: datetime,
         should_capture_today: bool,
     ) -> tuple[ForecastComparison, bool]:
-        """Capture today's PV total once at pre-midnight freeze and compare yesterday."""
+        """Capture today's PV total once after sunset and compare yesterday."""
         today_key = local_date.isoformat()
         pv_updated = False
         if should_capture_today and today_key not in self._actual_pv_by_date:
@@ -408,7 +456,8 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
                     pv_updated = True
 
         yesterday_key = (local_date - timedelta(days=1)).isoformat()
-        yesterday_snapshot = self._frozen_by_date.get(yesterday_key, {})
+        raw_snapshot = self._frozen_by_date.get(yesterday_key)
+        yesterday_snapshot = raw_snapshot if isinstance(raw_snapshot, dict) else {}
         forecast_raw = yesterday_snapshot.get("pv_forecast_kwh")
         forecast_yesterday = float(forecast_raw) if forecast_raw is not None else None
         actual_yesterday = self._actual_pv_by_date.get(yesterday_key)
@@ -483,9 +532,10 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
         local_t = schedule_state.now_local.time().replace(tzinfo=None)
         should_capture_pv = (
-            solar_end is not None and local_t >= solar_end
-        ) or (schedule_state.is_freeze_active and not schedule_state.in_tariff_window)
-        forecast_comparison, pv_updated = self._capture_pv_at_freeze_and_compare_yesterday(
+            (solar_end is not None and local_t >= solar_end)
+            or (solar_end is None and local_t >= time(22, 0))
+        )
+        forecast_comparison, pv_updated = self._capture_daily_pv_and_compare_yesterday(
             local_date=schedule_state.now_local.date(),
             now_utc=now_utc,
             should_capture_today=should_capture_pv,
@@ -553,6 +603,7 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
         )
 
         load_samples: list[DaytimeLoadSample] = []
+        recorder_err: str | None = None
         if sun_err is None and load_scale is not None and solar_start is not None and solar_end is not None:
             cache_key = (
                 schedule_state.now_local.date(),
@@ -565,24 +616,62 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
             if self._history_cache_key == cache_key:
                 load_samples = self._history_cache_samples
             else:
-                load_samples = await async_fetch_daytime_load_history(
-                    self.hass,
-                    entity_id=load_entity,
-                    solar_start=solar_start,
-                    solar_end=solar_end,
-                    timezone_name=self.hass.config.time_zone,
-                    lookback_days=lookback_days,
-                    unit_scale_to_kwh=load_scale,
-                    now=now_utc,
-                )
-                self._history_cache_key = cache_key
-                self._history_cache_samples = load_samples
+                try:
+                    load_samples = await async_fetch_daytime_load_history(
+                        self.hass,
+                        entity_id=load_entity,
+                        solar_start=solar_start,
+                        solar_end=solar_end,
+                        timezone_name=self.hass.config.time_zone,
+                        lookback_days=lookback_days,
+                        unit_scale_to_kwh=load_scale,
+                        now=now_utc,
+                    )
+                    self._history_cache_key = cache_key
+                    self._history_cache_samples = load_samples
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.warning("Recorder query failed for %s: %s", load_entity, err)
+                    recorder_err = f"recorder_error:{err}"
 
         if sun_err is not None:
             live_result = CalculationResult(
                 is_valid=False,
                 status_code=CalculationStatus.INVALID_SUN_WINDOW,
                 reason=sun_err,
+                target_soc_pct=None,
+                target_soc_raw=None,
+                surplus_kwh=None,
+                solar_soc_gain_pct=None,
+                grid_energy_required_kwh=None,
+                pv_forecast_kwh=pv_forecast_kwh,
+                current_soc_pct=current_soc_pct,
+                load_estimation=None,
+                calculated_at=schedule_state.now_local,
+                target_night_date=schedule_state.target_night_date,
+                config_snapshot=battery_cfg,
+            )
+        elif recorder_err is not None:
+            live_result = CalculationResult(
+                is_valid=False,
+                status_code=CalculationStatus.INSUFFICIENT_HISTORY,
+                reason=f"Recorder query failed ({recorder_err}).",
+                target_soc_pct=None,
+                target_soc_raw=None,
+                surplus_kwh=None,
+                solar_soc_gain_pct=None,
+                grid_energy_required_kwh=None,
+                pv_forecast_kwh=pv_forecast_kwh,
+                current_soc_pct=current_soc_pct,
+                load_estimation=None,
+                calculated_at=schedule_state.now_local,
+                target_night_date=schedule_state.target_night_date,
+                config_snapshot=battery_cfg,
+            )
+        elif pv_err is not None:
+            live_result = CalculationResult(
+                is_valid=False,
+                status_code=CalculationStatus.INVALID_PV_FORECAST,
+                reason=f"PV forecast invalid ({pv_err}).",
                 target_soc_pct=None,
                 target_soc_raw=None,
                 surplus_kwh=None,
@@ -679,12 +768,24 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
             real_control_enabled=not controller.is_simulation,
             charge_latched=charge_latched,
         )
-        last_action = await controller.async_apply_program_soc(
-            action=action_name,
-            target_soc_pct=desired_soc,
-            reason=action_reason,
-            now=schedule_state.now_local,
-        )
+        try:
+            last_action = await controller.async_apply_program_soc(
+                action=action_name,
+                target_soc_pct=desired_soc,
+                reason=action_reason,
+                now=schedule_state.now_local,
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.exception("Inverter control call failed: %s", err)
+            last_action = ControlActionRecord(
+                timestamp=schedule_state.now_local,
+                action="write_failed",
+                target_soc_pct=desired_soc,
+                simulated=controller.is_simulation,
+                reason=f"Inverter service call failed: {err}",
+                verified=False,
+            )
+        self._record_audit_action(last_action)
 
         return CoordinatorData(
             live_result=live_result,

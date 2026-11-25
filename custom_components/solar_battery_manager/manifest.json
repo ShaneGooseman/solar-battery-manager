@@ -1,0 +1,12 @@
+{
+  "domain": "solar_battery_manager",
+  "name": "Solar Battery Manager",
+  "codeowners": ["@ShaneGooseman"],
+  "config_flow": true,
+  "dependencies": ["recorder"],
+  "documentation": "https://github.com/ShaneGooseman/solar-battery-manager",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/ShaneGooseman/solar-battery-manager/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

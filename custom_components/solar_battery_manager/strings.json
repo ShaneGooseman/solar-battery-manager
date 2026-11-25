@@ -1,0 +1,72 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Solar Battery Manager — Entities",
+        "description": "Select the sensors used in read-only simulation mode. No inverter settings will be modified.",
+        "data": {
+          "pv_forecast_entity": "Tomorrow PV forecast sensor",
+          "load_energy_entity": "House load energy sensor (for daytime history)",
+          "battery_soc_entity": "Battery SOC sensor"
+        }
+      },
+      "parameters": {
+        "title": "Battery & Schedule Parameters",
+        "description": "Configure usable battery capacity (do not assume nominal 15 kWh), estimation window, and tariff schedule.",
+        "data": {
+          "usable_battery_kwh": "Usable battery capacity (kWh)",
+          "charge_efficiency": "Charge efficiency (%)",
+          "safety_margin_soc": "Safety margin (% SOC)",
+          "min_operational_soc": "Minimum operational SOC (%)",
+          "max_operational_soc": "Maximum operational SOC (%)",
+          "estimation_method": "Daytime load estimation method",
+          "lookback_days": "History lookback (days)",
+          "min_history_days": "Minimum valid history days",
+          "solar_window_start": "Solar generation window start",
+          "solar_window_end": "Solar generation window end",
+          "tariff_start": "Economic tariff start",
+          "tariff_end": "Economic tariff end",
+          "freeze_time": "Pre-midnight target freeze time"
+        }
+      }
+    },
+    "error": {
+      "invalid_entity": "Selected entity was not found or is invalid.",
+      "invalid_parameters": "One or more battery or schedule parameters are out of range.",
+      "invalid_schedule": "Tariff or solar window times are invalid."
+    },
+    "abort": {
+      "already_configured": "Solar Battery Manager is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Solar Battery Manager — Options",
+        "description": "Adjust calculation parameters. Integration runs in read-only simulation mode.",
+        "data": {
+          "pv_forecast_entity": "Tomorrow PV forecast sensor",
+          "load_energy_entity": "House load energy sensor (for daytime history)",
+          "battery_soc_entity": "Battery SOC sensor",
+          "usable_battery_kwh": "Usable battery capacity (kWh)",
+          "charge_efficiency": "Charge efficiency (%)",
+          "safety_margin_soc": "Safety margin (% SOC)",
+          "min_operational_soc": "Minimum operational SOC (%)",
+          "max_operational_soc": "Maximum operational SOC (%)",
+          "estimation_method": "Daytime load estimation method",
+          "lookback_days": "History lookback (days)",
+          "min_history_days": "Minimum valid history days",
+          "solar_window_start": "Solar generation window start",
+          "solar_window_end": "Solar generation window end",
+          "tariff_start": "Economic tariff start",
+          "tariff_end": "Economic tariff end",
+          "freeze_time": "Pre-midnight target freeze time"
+        }
+      }
+    },
+    "error": {
+      "invalid_parameters": "One or more battery or schedule parameters are out of range.",
+      "invalid_schedule": "Tariff or solar window times are invalid."
+    }
+  }
+}

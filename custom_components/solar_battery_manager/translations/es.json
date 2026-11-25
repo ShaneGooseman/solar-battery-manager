@@ -1,0 +1,72 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Solar Battery Manager — Entidades",
+        "description": "Selecciona los sensores en modo simulación de solo lectura. No se modificará ningún parámetro del inversor.",
+        "data": {
+          "pv_forecast_entity": "Sensor de previsión FV para mañana",
+          "load_energy_entity": "Sensor de energía de consumo de la vivienda (histórico diurno)",
+          "battery_soc_entity": "Sensor de SOC de batería"
+        }
+      },
+      "parameters": {
+        "title": "Parámetros de batería y horarios",
+        "description": "Configura la capacidad útil real (no asumir 15 kWh nominales), la ventana solar y la tarifa económica.",
+        "data": {
+          "usable_battery_kwh": "Capacidad útil de batería (kWh)",
+          "charge_efficiency": "Eficiencia de carga (%)",
+          "safety_margin_soc": "Margen de seguridad (% SOC)",
+          "min_operational_soc": "SOC mínimo operativo (%)",
+          "max_operational_soc": "SOC máximo operativo (%)",
+          "estimation_method": "Método de estimación de consumo diurno",
+          "lookback_days": "Días de histórico a consultar",
+          "min_history_days": "Mínimo de días válidos requeridos",
+          "solar_window_start": "Inicio de ventana solar",
+          "solar_window_end": "Fin de ventana solar",
+          "tariff_start": "Inicio de tarifa económica",
+          "tariff_end": "Fin de tarifa económica",
+          "freeze_time": "Hora de congelación pre-medianoche"
+        }
+      }
+    },
+    "error": {
+      "invalid_entity": "La entidad seleccionada no existe o no es válida.",
+      "invalid_parameters": "Uno o más parámetros de batería están fuera de rango.",
+      "invalid_schedule": "Los horarios de ventana solar o tarifa no son válidos."
+    },
+    "abort": {
+      "already_configured": "Solar Battery Manager ya está configurado."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Solar Battery Manager — Opciones",
+        "description": "Ajusta los parámetros de cálculo. La integración funciona en modo simulación de solo lectura.",
+        "data": {
+          "pv_forecast_entity": "Sensor de previsión FV para mañana",
+          "load_energy_entity": "Sensor de energía de consumo de la vivienda (histórico diurno)",
+          "battery_soc_entity": "Sensor de SOC de batería",
+          "usable_battery_kwh": "Capacidad útil de batería (kWh)",
+          "charge_efficiency": "Eficiencia de carga (%)",
+          "safety_margin_soc": "Margen de seguridad (% SOC)",
+          "min_operational_soc": "SOC mínimo operativo (%)",
+          "max_operational_soc": "SOC máximo operativo (%)",
+          "estimation_method": "Método de estimación de consumo diurno",
+          "lookback_days": "Días de histórico a consultar",
+          "min_history_days": "Mínimo de días válidos requeridos",
+          "solar_window_start": "Inicio de ventana solar",
+          "solar_window_end": "Fin de ventana solar",
+          "tariff_start": "Inicio de tarifa económica",
+          "tariff_end": "Fin de tarifa económica",
+          "freeze_time": "Hora de congelación pre-medianoche"
+        }
+      }
+    },
+    "error": {
+      "invalid_parameters": "Uno o más parámetros de batería están fuera de rango.",
+      "invalid_schedule": "Los horarios de ventana solar o tarifa no son válidos."
+    }
+  }
+}

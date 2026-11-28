@@ -1,6 +1,6 @@
 # Solar Battery Manager
 
-[🇪🇸 Documentación en español](../README.md) · [📋 Changelog](CHANGELOG.md)
+[🇪🇸 Documentación en español](../README.md) · [📘 Configuration Manual](MANUAL.en.md) · [📋 Changelog](CHANGELOG.md)
 
 Custom integration for **Home Assistant Core (2026.11+)** that estimates tomorrow's daytime photovoltaic surplus and calculates the **minimum target SOC at the end of the off-peak grid window** (default `08:00`) so daytime solar generation can charge the battery to 100%.
 
@@ -141,6 +141,7 @@ python -m unittest discover -s tests/unit -v
 ```
 *(On Windows, `tzdata` is required for `ZoneInfo("Europe/Madrid")`.)*
 
+- [MANUAL.en.md](MANUAL.en.md) — Step-by-step visual configuration manual.
 - [CHANGELOG.md](CHANGELOG.md) — Version history.
 - [TECHNICAL_SPEC.md](TECHNICAL_SPEC.md) — Current technical specification.
 - [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) — Phase status.

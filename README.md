@@ -1,6 +1,6 @@
 # Solar Battery Manager
 
-[🇬🇧 English documentation](docs/README.en.md) · [📋 Changelog](docs/CHANGELOG.md)
+[🇬🇧 English documentation](docs/README.en.md) · [📘 Manual de configuración](docs/MANUAL.md) · [📋 Changelog](docs/CHANGELOG.md)
 
 Integración personalizada para **Home Assistant Core (2026.11+)** que estima cuánta energía solar sobrará mañana y calcula el **SOC mínimo necesario al final de la tarifa económica nocturna** (por defecto `08:00`) para que la producción fotovoltaica del día lleve la batería al 100 %.
 
@@ -141,6 +141,7 @@ python -m unittest discover -s tests/unit -v
 ```
 *(En Windows requiere `tzdata` para `ZoneInfo("Europe/Madrid")`.)*
 
+- [docs/MANUAL.md](docs/MANUAL.md) — Manual visual de configuración paso a paso.
 - [docs/CHANGELOG.md](docs/CHANGELOG.md) — Historial de versiones.
 - [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md) — Especificación técnica actual.
 - [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) — Estado por fases.

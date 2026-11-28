@@ -8,14 +8,9 @@ import logging
 import math
 from typing import Any
 
-from zoneinfo import ZoneInfo
-
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, UnitOfEnergy
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_BATTERY_NOMINAL_VOLTAGE,
@@ -292,7 +287,8 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
         if was_enabled and target_entity:
             idle_soc = int(round(float(self._cfg(CONF_NIGHT_IDLE_SOC, DEFAULT_NIGHT_IDLE_SOC))))
             controller = self._get_deye_controller(str(target_entity))
-            local_now = datetime.now(ZoneInfo(self.hass.config.time_zone))
+            tz = await dt_util.async_get_time_zone(self.hass.config.time_zone) or timezone.utc
+            local_now = datetime.now(tz)
             try:
                 record = await controller.async_apply_program_soc(
                     action="restore_idle_on_disable",
@@ -519,6 +515,7 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
             await self.async_load_storage()
 
         now_utc = datetime.now(timezone.utc)
+        tz = await dt_util.async_get_time_zone(self.hass.config.time_zone) or timezone.utc
         battery_cfg = BatteryConfig(
             usable_battery_kwh=float(self._cfg(CONF_USABLE_BATTERY_KWH, DEFAULT_USABLE_BATTERY_KWH)),
             charge_efficiency=float(self._cfg(CONF_CHARGE_EFFICIENCY, DEFAULT_CHARGE_EFFICIENCY_PCT))
@@ -536,7 +533,7 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
             tariff_start=time.fromisoformat(str(self._cfg(CONF_TARIFF_START, DEFAULT_TARIFF_START))),
             tariff_end=time.fromisoformat(str(self._cfg(CONF_TARIFF_END, DEFAULT_TARIFF_END))),
             freeze_time=time.fromisoformat(str(self._cfg(CONF_FREEZE_TIME, DEFAULT_FREEZE_TIME))),
-            timezone=self.hass.config.time_zone,
+            timezone=tz,
         )
         schedule_state = evaluate_schedule(now_utc, schedule_cfg)
 
@@ -565,7 +562,7 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
             solar_start, solar_end, sun_err_code = resolve_solar_window_from_sun(
                 sun_state.attributes.get("next_rising"),
                 sun_state.attributes.get("next_setting"),
-                self.hass.config.time_zone,
+                tz,
             )
             if sun_err_code is not None:
                 sun_err = f"Sun entity '{sun_entity}' error: {sun_err_code}."
@@ -667,7 +664,7 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
                         entity_id=load_entity,
                         solar_start=solar_start,
                         solar_end=solar_end,
-                        timezone_name=self.hass.config.time_zone,
+                        timezone_name=tz,
                         lookback_days=lookback_days,
                         unit_scale_to_kwh=load_scale,
                         now=now_utc,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta, tzinfo
 from zoneinfo import ZoneInfo
 
 from .models import ScheduleState, TariffScheduleConfig
@@ -34,7 +34,11 @@ def evaluate_schedule(
     if errors:
         raise ValueError(" ".join(errors))
 
-    tz = ZoneInfo(schedule.timezone)
+    tz = (
+        schedule.timezone
+        if isinstance(schedule.timezone, tzinfo)
+        else ZoneInfo(schedule.timezone)
+    )
     now_local = now.astimezone(tz)
     local_date = now_local.date()
     local_time = now_local.time().replace(tzinfo=None)

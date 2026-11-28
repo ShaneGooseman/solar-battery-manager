@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone, tzinfo
 import logging
 import math
 from typing import TYPE_CHECKING, Any
@@ -21,7 +21,7 @@ _LOGGER = logging.getLogger(__name__)
 def resolve_solar_window_from_sun(
     next_rising_raw: Any,
     next_setting_raw: Any,
-    timezone_name: str,
+    timezone_name: str | tzinfo,
 ) -> tuple[time | None, time | None, str | None]:
     """Derive local solar window [sunrise, sunset) from Sun entity attributes.
 
@@ -30,7 +30,7 @@ def resolve_solar_window_from_sun(
     if not next_rising_raw or not next_setting_raw:
         return None, None, "sun_entity_missing_rising_or_setting_attributes"
     try:
-        tz = ZoneInfo(timezone_name)
+        tz = timezone_name if isinstance(timezone_name, tzinfo) else ZoneInfo(timezone_name)
         rising_dt = (
             next_rising_raw
             if isinstance(next_rising_raw, datetime)
@@ -52,7 +52,7 @@ def resolve_solar_window_from_sun(
         return None, None, "sun_entity_invalid_datetime_attributes"
 
 
-def _parse_stat_start(raw_start: Any, tz: ZoneInfo) -> datetime | None:
+def _parse_stat_start(raw_start: Any, tz: tzinfo) -> datetime | None:
     """Convert a Recorder statistics 'start' field to a local aware datetime."""
     if isinstance(raw_start, datetime):
         dt = raw_start if raw_start.tzinfo is not None else raw_start.replace(tzinfo=timezone.utc)
@@ -67,7 +67,7 @@ def extract_daytime_samples_from_hourly_stats(
     *,
     solar_start: time,
     solar_end: time,
-    timezone_name: str,
+    timezone_name: str | tzinfo,
     end_date_exclusive: date,
     lookback_days: int,
     unit_scale_to_kwh: float = 1.0,
@@ -84,7 +84,7 @@ def extract_daytime_samples_from_hourly_stats(
     if unit_scale_to_kwh <= 0 or not math.isfinite(unit_scale_to_kwh):
         raise ValueError("unit_scale_to_kwh must be finite and > 0.")
 
-    tz = ZoneInfo(timezone_name)
+    tz = timezone_name if isinstance(timezone_name, tzinfo) else ZoneInfo(timezone_name)
     start_date_inclusive = end_date_exclusive - timedelta(days=lookback_days)
 
     daily_totals: dict[date, float] = defaultdict(float)
@@ -189,7 +189,7 @@ async def async_fetch_daytime_load_history(
     entity_id: str,
     solar_start: time,
     solar_end: time,
-    timezone_name: str,
+    timezone_name: str | tzinfo,
     lookback_days: int,
     unit_scale_to_kwh: float = 1.0,
     now: datetime | None = None,
@@ -197,8 +197,15 @@ async def async_fetch_daytime_load_history(
     """Query Home Assistant Core Recorder statistics for daytime house load."""
     from homeassistant.components.recorder import get_instance
     from homeassistant.components.recorder.statistics import statistics_during_period
+    from homeassistant.util import dt as dt_util
 
-    tz = ZoneInfo(timezone_name)
+    if isinstance(timezone_name, tzinfo):
+        tz = timezone_name
+    else:
+        resolved_tz = await dt_util.async_get_time_zone(timezone_name)
+        if resolved_tz is None:
+            raise ValueError(f"Unknown timezone: {timezone_name!r}")
+        tz = resolved_tz
     now_local = (now or datetime.now(timezone.utc)).astimezone(tz)
     end_date_exclusive = now_local.date()
 
@@ -230,7 +237,7 @@ async def async_fetch_daytime_load_history(
         rows,
         solar_start=solar_start,
         solar_end=solar_end,
-        timezone_name=timezone_name,
+        timezone_name=tz,
         end_date_exclusive=end_date_exclusive,
         lookback_days=lookback_days,
         unit_scale_to_kwh=unit_scale_to_kwh,

@@ -141,6 +141,33 @@ class TestSunSolarWindow(unittest.TestCase):
         self.assertIsNone(end)
         self.assertIsNotNone(err)
 
+    def test_accepts_pre_resolved_tzinfo_object(self) -> None:
+        tz = ZoneInfo("Europe/Madrid")
+        start, end, err = resolve_solar_window_from_sun(
+            "2026-11-26T06:50:00+00:00",
+            "2026-11-25T16:45:00+00:00",
+            tz,
+        )
+        self.assertIsNone(err)
+        self.assertEqual(start, time(7, 50))
+        self.assertEqual(end, time(17, 45))
+
+        rows = [
+            {"start": datetime(2026, 11, 24, 8, 0, tzinfo=tz), "change": 1.0},
+            {"start": datetime(2026, 11, 24, 9, 0, tzinfo=tz), "change": 1.5},
+        ]
+        samples = extract_daytime_samples_from_hourly_stats(
+            rows,
+            solar_start=time(8, 0),
+            solar_end=time(10, 0),
+            timezone_name=tz,
+            end_date_exclusive=date(2026, 11, 25),
+            lookback_days=1,
+        )
+        self.assertEqual(len(samples), 1)
+        self.assertTrue(samples[0].is_valid)
+        self.assertAlmostEqual(samples[0].kwh or 0.0, 2.5)
+
 
 if __name__ == "__main__":
     unittest.main()

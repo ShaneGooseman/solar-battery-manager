@@ -96,6 +96,16 @@ class TestSchedule(unittest.TestCase):
             is_within_solar_window(datetime(2026, 11, 25, 18, 0, tzinfo=tz), time(8, 0), time(18, 0))
         )
 
+    def test_accepts_pre_resolved_tzinfo_object(self) -> None:
+        tz = ZoneInfo("Europe/Madrid")
+        schedule = TariffScheduleConfig(timezone=tz)
+        self.assertEqual(schedule.validate(), [])
+        utc_dt = datetime(2026, 11, 25, 23, 0, tzinfo=timezone.utc)
+        state = evaluate_schedule(utc_dt, schedule)
+        self.assertTrue(state.in_tariff_window)
+        self.assertEqual(state.now_local.hour, 0)
+        self.assertEqual(state.target_night_date, date(2026, 11, 26))
+
 
 if __name__ == "__main__":
     unittest.main()

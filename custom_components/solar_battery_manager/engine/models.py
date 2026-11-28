@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime, time, tzinfo
 from enum import StrEnum
 import math
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -147,17 +147,18 @@ class TariffScheduleConfig:
     tariff_start: time = time(0, 0)
     tariff_end: time = time(8, 0)
     freeze_time: time = time(23, 55)
-    timezone: str = "Europe/Madrid"
+    timezone: str | tzinfo = "Europe/Madrid"
 
     def validate(self) -> list[str]:
         """Validate tariff schedule configuration."""
         errors: list[str] = []
         if self.tariff_start == self.tariff_end:
             errors.append("tariff_start and tariff_end cannot be equal.")
-        try:
-            ZoneInfo(self.timezone)
-        except ZoneInfoNotFoundError:
-            errors.append(f"Unknown timezone: {self.timezone!r}.")
+        if not isinstance(self.timezone, tzinfo):
+            try:
+                ZoneInfo(self.timezone)
+            except ZoneInfoNotFoundError:
+                errors.append(f"Unknown timezone: {self.timezone!r}.")
         return errors
 
 

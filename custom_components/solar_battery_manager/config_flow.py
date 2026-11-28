@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import time
+from datetime import time, tzinfo
 from typing import Any
 
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
+from homeassistant.util import dt as dt_util
 from homeassistant.helpers.selector import (
     EntitySelector,
     EntitySelectorConfig,
@@ -74,6 +75,7 @@ def _parse_time_str(value: str | time) -> time:
 def _validate_selected_entities(
     hass: Any,
     user_input: dict[str, Any],
+    timezone_info: str | tzinfo | None = None,
 ) -> dict[str, str]:
     """Validate existence and expected measurement units of selected entities."""
     for key in (
@@ -128,7 +130,7 @@ def _validate_selected_entities(
     _, _, sun_err = resolve_solar_window_from_sun(
         sun_state.attributes.get("next_rising"),
         sun_state.attributes.get("next_setting"),
-        hass.config.time_zone,
+        timezone_info if timezone_info is not None else hass.config.time_zone,
     )
     if sun_err is not None:
         return {"base": "invalid_sun_entity"}
@@ -138,7 +140,7 @@ def _validate_selected_entities(
 
 def _validate_parameters(
     data: dict[str, Any],
-    timezone_name: str,
+    timezone_name: str | tzinfo,
 ) -> dict[str, str]:
     """Validate battery, estimation, and schedule parameters."""
     errors: dict[str, str] = {}
@@ -341,7 +343,8 @@ class SolarBatteryManagerConfigFlow(ConfigFlow, domain=DOMAIN):
 
         errors: dict[str, str] = {}
         if user_input is not None:
-            errors = _validate_selected_entities(self.hass, user_input)
+            tz = await dt_util.async_get_time_zone(self.hass.config.time_zone)
+            errors = _validate_selected_entities(self.hass, user_input, tz)
             if not errors:
                 self._entity_data = user_input
                 return await self.async_step_parameters()
@@ -359,7 +362,11 @@ class SolarBatteryManagerConfigFlow(ConfigFlow, domain=DOMAIN):
         """Step 2: configure battery, estimation, and tariff schedule."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            errors = _validate_parameters(user_input, self.hass.config.time_zone)
+            tz = (
+                await dt_util.async_get_time_zone(self.hass.config.time_zone)
+                or self.hass.config.time_zone
+            )
+            errors = _validate_parameters(user_input, tz)
             if not errors:
                 full_data = {**self._entity_data, **user_input}
                 return self.async_create_entry(
@@ -392,9 +399,13 @@ class SolarBatteryManagerOptionsFlow(OptionsFlow):
         merged = {**self.config_entry.data, **self.config_entry.options}
 
         if user_input is not None:
-            errors = _validate_selected_entities(self.hass, user_input)
+            tz = (
+                await dt_util.async_get_time_zone(self.hass.config.time_zone)
+                or self.hass.config.time_zone
+            )
+            errors = _validate_selected_entities(self.hass, user_input, tz)
             if not errors:
-                errors = _validate_parameters(user_input, self.hass.config.time_zone)
+                errors = _validate_parameters(user_input, tz)
             if not errors:
                 return self.async_create_entry(title="", data=user_input)
 

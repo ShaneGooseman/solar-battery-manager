@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone, tzinfo
 import math
 from zoneinfo import ZoneInfo
 
@@ -212,7 +212,11 @@ def plan_charge_window(
     buffer_minutes: int = 15,
 ) -> ChargeSchedulePlan:
     """Calculate when grid charging must start to reach target SOC by window end."""
-    tz = ZoneInfo(schedule_config.timezone)
+    tz = (
+        schedule_config.timezone
+        if isinstance(schedule_config.timezone, tzinfo)
+        else ZoneInfo(schedule_config.timezone)
+    )
     end_date = schedule_state.target_night_date
     start_date = (
         end_date - timedelta(days=1)

@@ -2,6 +2,10 @@
 
 Todos los cambios relevantes de **Solar Battery Manager** se documentan en este archivo.
 
+## [0.2.8] — 2026-11-28
+- Asocia las entradas del **Logbook** de control real al `entity_id` del interruptor `Control real del inversor`, de modo que los cambios automáticos del SOC aparecen directamente en la tarjeta **Actividad** del dispositivo.
+- Renombra la etiqueta de `battery_nominal_voltage` en la interfaz a **Voltaje de carga de la batería (V)** / **Battery charging voltage (V)** con descripción aclaratoria (manteniendo compatibilidad con configuraciones existentes).
+
 ## [0.2.7] — 2026-11-26
 - Usa `suggested_value` en los selectores de entidades opcionales de `ConfigFlow` y `OptionsFlow` para evitar errores con `default=None` y permitir limpiar campos opcionales en la UI.
 - Reporta explícitamente el motivo cuando el sensor de consumo diario no tiene unidad `kWh`/`Wh` en lugar de enmascararlo como `INSUFFICIENT_HISTORY`.

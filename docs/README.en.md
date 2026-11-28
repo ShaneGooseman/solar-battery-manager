@@ -4,7 +4,7 @@
 
 Custom integration for **Home Assistant Core (2026.11+)** that estimates tomorrow's daytime photovoltaic surplus and calculates the **minimum target SOC at the end of the off-peak grid window** (default `08:00`) so daytime solar generation can charge the battery to 100%.
 
-> **Safe by default (`v0.2.7`)**: the integration runs in **simulation mode** while **`Real inverter control`** is turned off (`OFF` by default). When explicitly enabled, it only updates the overnight Program SOC target (`number.inversordeye_program_1_soc`) and never modifies voltages, max currents, or BMS protections.
+> **Safe by default (`v0.2.8`)**: the integration runs in **simulation mode** while **`Real inverter control`** is turned off (`OFF` by default). When explicitly enabled, it only updates the overnight Program SOC target (`number.inversordeye_program_1_soc`) and never modifies voltages, max currents, or BMS protections.
 
 ---
 

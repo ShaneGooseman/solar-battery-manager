@@ -28,7 +28,7 @@
           "min_operational_soc": "SOC mínimo operativo (%)",
           "max_operational_soc": "SOC máximo operativo (%)",
           "night_idle_soc": "SOC mínimo de reposo nocturno (%)",
-          "battery_nominal_voltage": "Tensión nominal de batería (V)",
+          "battery_nominal_voltage": "Voltaje de carga de la batería (V)",
           "charge_time_buffer_minutes": "Margen de tiempo de carga (minutos)",
           "estimation_method": "Método de estimación de consumo diurno",
           "lookback_days": "Días de histórico a consultar",
@@ -69,7 +69,7 @@
           "min_operational_soc": "SOC mínimo operativo (%)",
           "max_operational_soc": "SOC máximo operativo (%)",
           "night_idle_soc": "SOC mínimo de reposo nocturno (%)",
-          "battery_nominal_voltage": "Tensión nominal de batería (V)",
+          "battery_nominal_voltage": "Voltaje de carga de la batería (V)",
           "charge_time_buffer_minutes": "Margen de tiempo de carga (minutos)",
           "estimation_method": "Método de estimación de consumo diurno",
           "lookback_days": "Días de histórico a consultar",
@@ -80,7 +80,8 @@
         },
         "data_description": {
           "grid_charge_current_entity": "Entidad del inversor con los amperios máximos de carga desde red (ej. number.inversordeye_battery_grid_charging_current).",
-          "sun_entity": "Entidad de la integración Sun (sun.sun) para obtener automáticamente amanecer y atardecer."
+          "sun_entity": "Entidad de la integración Sun (sun.sun) para obtener automáticamente amanecer y atardecer.",
+          "battery_nominal_voltage": "Voltaje real de la batería mientras carga desde red (ej. 53 V en LiFePO4). Se usa junto con los amperios para estimar la potencia y la hora de inicio de carga."
         }
       }
     },

@@ -445,12 +445,20 @@ class SolarBatteryCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
         try:
             from homeassistant.components.logbook import async_log_entry
+            from homeassistant.helpers import entity_registry as er
 
+            ent_reg = er.async_get(self.hass)
+            switch_entity_id = ent_reg.async_get_entity_id(
+                "switch",
+                DOMAIN,
+                f"{self.entry.entry_id}_real_control",
+            )
             async_log_entry(
                 self.hass,
                 name="Solar Battery Manager",
                 message=f"{record.action} (SOC={record.target_soc_pct}%, verified={record.verified}): {record.reason}",
                 domain=DOMAIN,
+                entity_id=switch_entity_id,
             )
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Logbook entry skipped: %s", err)

@@ -28,7 +28,7 @@
           "min_operational_soc": "Minimum operational SOC (%)",
           "max_operational_soc": "Maximum operational SOC (%)",
           "night_idle_soc": "Night idle SOC (%)",
-          "battery_nominal_voltage": "Nominal battery voltage (V)",
+          "battery_nominal_voltage": "Battery charging voltage (V)",
           "charge_time_buffer_minutes": "Charge time safety buffer (minutes)",
           "estimation_method": "Daytime load estimation method",
           "lookback_days": "History lookback (days)",
@@ -69,7 +69,7 @@
           "min_operational_soc": "Minimum operational SOC (%)",
           "max_operational_soc": "Maximum operational SOC (%)",
           "night_idle_soc": "Night idle SOC (%)",
-          "battery_nominal_voltage": "Nominal battery voltage (V)",
+          "battery_nominal_voltage": "Battery charging voltage (V)",
           "charge_time_buffer_minutes": "Charge time safety buffer (minutes)",
           "estimation_method": "Daytime load estimation method",
           "lookback_days": "History lookback (days)",
@@ -80,7 +80,8 @@
         },
         "data_description": {
           "grid_charge_current_entity": "Inverter entity with the max grid charging current in Amperes (e.g. number.inversordeye_battery_grid_charging_current).",
-          "sun_entity": "Sun integration entity (sun.sun) used to obtain sunrise and sunset times."
+          "sun_entity": "Sun integration entity (sun.sun) used to obtain sunrise and sunset times.",
+          "battery_nominal_voltage": "Typical battery voltage while charging from the grid (e.g. 53 V for LiFePO4). Used with current (A) to estimate charge power and start time."
         }
       }
     },

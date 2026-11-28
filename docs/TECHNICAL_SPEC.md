@@ -1,4 +1,4 @@
-# Especificación técnica — Solar Battery Manager (v0.2.7)
+# Especificación técnica — Solar Battery Manager (v0.2.8)
 
 ## 1. Comportamiento funcional
 
